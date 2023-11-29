@@ -60,22 +60,21 @@ def radiationdata(): # REDUNDANT - was used for opening CAMS radiation datasets
     return GHI_all, GHI_clear, rad_time
 
 
-def NRELdata(start, end, file, interval): # For opening NREL psmv3 data
+def NRELdata(start, end, year, latitude, longitude, interval): # For opening NREL psmv3 data
     
     import numpy as np
     import pandas as pd
     from NSRDB_API import PSMv3_API
 
-    specific_rows = np.arange(2)  # cut out crap at the top
     try:
-        df = pd.read_csv(file, skiprows = specific_rows) # Try to open this
+        df = pd.read_csv(rf'C:\Users\mark\Documents\L4-Project-Data\NSRDB Data\lat{latitude}-long{longitude}_{year}_{interval}min.csv') # Try to open this
     except:
-        df = PSMv3_API(36.626,-116.018,2021,5) # If it doesn't exist then run api request
-        df.to_csv('L4-Project-Data')
+        df = PSMv3_API(latitude, longitude, year, interval) # If it doesn't exist then run api request
+                                                            # df = PSMv3_API(36.626,-116.018,2021,5)
+        df.to_csv(rf'C:\Users\mark\Documents\L4-Project-Data\NSRDB Data\lat{latitude}-long{longitude}_{year}_{interval}min.csv')
 
-    year = df['Year']
     # Get range of time we want
-    complete_time = np.arange('%s-01-01' %(year[0]), '%s-12-31' %(year[0]), dtype=f'datetime64[{interval}m]')
+    complete_time = np.arange('%s-01-01' %(year), '%s-12-31' %(year), dtype=f'datetime64[{interval}m]')
     i = j = 0   
     for t in complete_time:
         if start > t:
@@ -83,19 +82,9 @@ def NRELdata(start, end, file, interval): # For opening NREL psmv3 data
         elif start <= t <= end:
             j=j+1
     
-    temporary = df[i:i+j]       # select the times we want
-    FARMS_ghi = temporary["GHI"]           # extract the data
-    FARMS_dhi = temporary["DHI"]
-    FARMS_dni = temporary["DNI"]
-    cloud_type = temporary["Cloud Type"]
-    wind = temporary["Wind Speed"]
-    temperature = temporary["Temperature"]
-    # clear_ghi = temporary["GHI"]
-    # clear_ghi = temporary["GHI"]
-    # clear_ghi = temporary["GHI"]
+    NSRDB_data = df[i:i+j]  # select the times we want
 
-
-    return year, FARMS_ghi, FARMS_dhi, FARMS_dni, cloud_type, wind, temperature
+    return NSRDB_data
 
  
 def BSRNdata(start, end): # For opening Baseline Surface Radiation Network data

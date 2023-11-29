@@ -2,9 +2,9 @@ def PSMv3_API(latitude, longitude, year, interval):
     
     import pvlib
     
-    attributes='air_temperature', 'dhi', 'dni', 'ghi',
-    'surface_albedo', 'wind_speed', 'cloud_type', 'air_temperature'
-    'clearsky_dhi', 'clearsky_dni', 'clearsky_ghi'
+    attributes=('air_temperature', 'dhi', 'dni', 'ghi',
+    'surface_albedo', 'wind_speed', 'cloud_type',
+    'clearsky_dhi', 'clearsky_dni', 'clearsky_ghi')
     #,'dew_point', 'surface_pressure'
     
     data, metadata = pvlib.iotools.get_psm3(latitude=latitude, longitude=longitude, names=f'{year}', 
@@ -16,3 +16,4 @@ def PSMv3_API(latitude, longitude, year, interval):
     return data
 
 # data = PSMv3_API(36.626,-116.018,2021,5)
+#'air_temperature', 'dhi', 'dni', 'ghi',

@@ -16,37 +16,31 @@ from Data.open_data import NRELdata
 
 celltype = 'monoSi'
 pdc0 = 400
-v_mp = 44.1
-i_mp = 9.08
-v_oc = 53.4
-i_sc = 9.60
-alpha_sc = 0.0005 * i_sc
-beta_voc = -0.0029 * v_oc
 gamma_pdc = -0.0037
-cells_in_series = 6*27
 temp_ref = 25
 
-location = Location(latitude=36.626,longitude=0,#-116.018
-                    name='Desert Rock',altitude=1000 #,tz='US/Pacific'
-                    )
-surface_azimuth=180
-surface_tilt=37
-
-start = np.datetime64('2022-05-26T00:00')
-end = np.datetime64('2022-05-30T00:00')
+# Choose time range:
+year = 2022
+start = np.datetime64(f'{year}-05-26T00:00')
+end = np.datetime64(f'{year}-05-30T00:00')
 
 # Get NREL (FARMS) data
-file = r'C:\Users\mark\Documents\L4-Project-Code\Data\Desert Rock\NREL_2022_DRA_5min.csv'
-interval='5m'
-year, FARMS_ghi, FARMS_dhi, FARMS_dni, cloud_type, wind, air_temp = NRELdata(start,end)
-FARMS_time = np.arange(start, end+5, dtype=f'datetime64[{interval}]')
+latitude = 36.626
+longitude = -116.018 
+interval = 5 # in minutes
+data = NRELdata(start, end, year, latitude, longitude, interval)
+FARMS_time = np.arange(start, end+5, dtype=f'datetime64[{interval}m]')
+
+# Location
+surface_azimuth=180
+surface_tilt=37
 
 #solarpos = location.get_solarposition(times=pd.date_range(start=start, end=end, freq='h'))
 
 
-temp_cell = pvlib.temperature.faiman(FARMS_ghi, air_temp, wind)
+temp_cell = pvlib.temperature.faiman(data['GHI'], data['Temperature'], data['Wind Speed'])
 
-results_dc = pvlib.pvsystem.pvwatts_dc(FARMS_ghi,
+results_dc = pvlib.pvsystem.pvwatts_dc(data['GHI'],
                                       temp_cell, pdc0, 
                                       gamma_pdc = gamma_pdc, temp_ref=25)
 

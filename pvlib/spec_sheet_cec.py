@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
 # Import data
-from SMARTS.open_copernicus import NRELdata
+from Data.open_data import NRELdata
 
 # Define parameters
 celltype = 'monoSi'
@@ -26,22 +26,24 @@ beta_voc = -0.0029 * v_oc
 gamma_pdc = -0.37  
 cells_in_series = 6*27
 
-location = Location(latitude=36.626,longitude=0,#-116.018
-                    name='Desert Rock',altitude=1000 #,tz='US/Pacific'
-                    )
+# Choose time range:
+year = 2022
+start = np.datetime64(f'{year}-05-26T00:00')
+end = np.datetime64(f'{year}-05-30T00:00')
+
+# Get NREL (FARMS) data
+latitude = 36.626
+longitude = -116.018 
+interval = 5 # in minutes
+data = NRELdata(start, end, year, latitude, longitude, interval)
+FARMS_time = np.arange(start, end+5, dtype=f'datetime64[{interval}m]')
+
+# Location
 surface_azimuth=180
 surface_tilt=37
 
-# Start and end dates to simulate
-start = np.datetime64('2022-05-26T00:00')
-end = np.datetime64('2022-05-30T00:00')
-
-# Get NREL (FARMS) data
-year, FARMS_ghi, FARMS_dhi, FARMS_dni, cloud_type, wind, air_temp = NRELdata(start,end)
-FARMS_time = np.arange(start, end+5, dtype='datetime64[5m]')
-
 # Calculate cell parameters
-temp_cell = pvlib.temperature.faiman(FARMS_ghi, air_temp, wind)
+temp_cell = pvlib.temperature.faiman(data['GHI'], data['Temperature'], data['Wind Speed'])
 
 I_L_ref, I_o_ref, R_s, R_sh_ref, a_ref, Adjust = pvlib.ivtools.sdm.fit_cec_sam(
     celltype=celltype,
@@ -54,14 +56,15 @@ I_L_ref, I_o_ref, R_s, R_sh_ref, a_ref, Adjust = pvlib.ivtools.sdm.fit_cec_sam(
     gamma_pmp = gamma_pdc,
     cells_in_series = cells_in_series)
 
-cec_params = pvlib.pvsystem.calcparams_cec(FARMS_ghi, temp_cell, alpha_sc, a_ref,
+cec_params = pvlib.pvsystem.calcparams_cec(data['GHI'], temp_cell, alpha_sc, a_ref,
                               I_L_ref, I_o_ref, R_sh_ref, R_s, Adjust)
 
 # Max power point
 mpp = pvlib.pvsystem.max_power_point(*cec_params, method='newton')
-mpp.plot(figsize=(16,9))
-plt.show
+# mpp.plot(figsize=(16,9))
+# plt.show
 
+# Scale up
 system = PVSystem(modules_per_string=5, strings_per_inverter=1)
 dc_scaled = system.scale_voltage_current_power(mpp)
 dc_scaled.plot(figsize=(16,9))
@@ -78,9 +81,9 @@ ac_results.plot(figsize=(16,9))
 plt.title('AC Power')
 plt.show()
 
-# AC power with custom inverter
-results_ac = pvlib.inverter.pvwatts(pdc=dc_scaled.p_mp, pdc0=2000,
-                                    eta_inv_nom=0.961, eta_inv_ref=0.9637)
-results_ac.plot(figsize=(16,9))
-plt.title('AC Power')
-plt.show()
+# # AC power with custom inverter
+# results_ac = pvlib.inverter.pvwatts(pdc=dc_scaled.p_mp, pdc0=2000,
+#                                     eta_inv_nom=0.961, eta_inv_ref=0.9637)
+# results_ac.plot(figsize=(16,9))
+# plt.title('AC Power')
+# plt.show()
