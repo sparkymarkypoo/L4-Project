@@ -1,0 +1,12 @@
+[workspace]
+restore_data_on_startup = True
+save_data_on_exit = True
+save_history = True
+save_non_project_files = False
+project_type = 'empty-project-type'
+recent_files = ['FARMS\\FARMS_plot.py', 'pvlib\\modelchain.py', 'pvlib\\spect_response.py', 'pvlib\\spec_sheet_model.py', 'pvlib\\spec_sheet_cec.py', 'pvlib\\nsrdb_comparison.py', 'Data\\open_data.py', 'NSRDB_API.py']
+
+[main]
+version = 0.2.0
+recent_files = []
+
