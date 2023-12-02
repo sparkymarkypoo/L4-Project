@@ -93,12 +93,12 @@ def BSRNdata(start, end): # For opening Baseline Surface Radiation Network data
     import pandas as pd
    
     specific_rows = np.arange(22)  # cut out crap at the top     
-    df = pd.read_csv(r'C:\Users\mark\Documents\L4-Project-Code\Copernicus\Desert Rock\DRA_radiation_2022-05.tab', delimiter ='\t', skiprows = specific_rows)
+    df = pd.read_csv(r'C:\Users\mark\Documents\L4-Project-Data\DRA_radiation_2022-05.tab', delimiter ='\t', skiprows = specific_rows)
     
-    ts = pd.to_datetime(df['Date/Time'])           # Timestamp
+    ts = pd.to_datetime(df['Date/Time']) - pd.Timedelta(hours=8)   # Timestamp
     complete_time = np.zeros(len(ts), dtype='datetime64[1m]')
     for k in range(len(ts)):
-        complete_time[k] = ts[k].to_datetime64()   # Datetime64
+        complete_time[k] = ts[k].to_datetime64()+8*6000   # Datetime64
     
     i = j = 0   
     for t in complete_time:

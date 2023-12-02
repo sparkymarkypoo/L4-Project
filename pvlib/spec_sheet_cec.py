@@ -28,8 +28,8 @@ cells_in_series = 6*27
 
 # Choose time range:
 year = 2022
-start = np.datetime64(f'{year}-05-26T00:00')
-end = np.datetime64(f'{year}-05-30T00:00')
+start = np.datetime64(f'{year}-02-01T00:00')
+end = np.datetime64(f'{year}-02-28T00:00')
 
 # Get NREL (FARMS) data
 latitude = 36.626

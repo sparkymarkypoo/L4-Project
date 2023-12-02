@@ -1,13 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-from SMARTS.open_copernicus import BSRNdata
-from SMARTS.open_copernicus import NRELdata
+from Data.open_data import BSRNdata
+from Data.open_data import NRELdata
 # %edit C:\Users\mark\anaconda3\Lib\site-packages\pySMARTS\main.py
 
 # Choose time range:
-start = np.datetime64('2022-05-27T12:00')
-end = np.datetime64('2022-05-29T12:00')
+start = np.datetime64('2022-05-01T00:00')
+end = np.datetime64('2022-05-30T00:00')
 
 # Get NREL (FARMS) stuff
 year, FARMS_ghi, FARMS_dhi, FARMS_dni, cloud_type, wind, temperature = NRELdata(start,end)
@@ -46,9 +46,6 @@ ax1.plot(FARMS_time-7*12, FARMS_ghi, label = 'FARMS All Sky')
 ## Copernicus data
 #ax1.plot(rad_time, GHI_all, label = 'COP All Sky')
 #ax1.plot(rad_time, GHI_clear, label = 'COP Clear Sky')
-
-# # SMARTS data
-# ax1.plot(time, area, label = 'SMARTS')
 
 # # Percentage Error
 # ax2 = ax1.twinx()
