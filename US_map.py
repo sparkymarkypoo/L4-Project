@@ -1,37 +1,20 @@
 
-def get_capitals():
-    import pandas as pd
-    import numpy as np
-    
-    capitals = pd.read_csv(r'C:\Users\mark\Documents\L4-Project-Data\us-state-capitals.csv')
-    capitals_numpy = np.array([[capitals['LAT'], capitals['LONG'], capitals['CAPITAL']]])
-    coords = capitals_numpy.transpose()
-    return coords, capitals
-
-
-def draw_map(perc_loss):
+def county_map():
     import geopandas
-    import pandas as pd
     
     # Load the shape file using geopandas
-    geo_usa = geopandas.read_file(r'C:\Users\mark\Documents\L4-Project-Data\cb_2018_us_state_20m\cb_2018_us_state_20m.shp')
-    #geo_cut = geo_usa.drop([7,25,48]) # Cut rubbish states
-    
+    geo_usa = geopandas.read_file(r'C:\Users\mark\OneDrive - Durham University\L4 Project\L4-Project-Data\Grid\cb_2018_us_county_500k\cb_2018_us_county_500k.shp')
+
     # Add % loss to capitals dataframe
-    coords, capitals = get_capitals()
-    capitals['PERC_LOSS'] = pd.Series(perc_loss)
+    geo_usa['LAT'] = geo_usa.centroid.map(lambda p: p.y)
+    geo_usa['LONG'] = geo_usa.centroid.map(lambda p: p.x)
     
-    # Merge usa_state data and geo_usa shapefile
-    geo_merge=geo_usa.merge(capitals,on='NAME')
+    # Select states
+    df_new = geo_usa[(geo_usa['STATEFP'] == '06') | # CA
+                     (geo_usa['STATEFP'] == '32') | # NV
+                     (geo_usa['STATEFP'] == '04') | # AR
+                     (geo_usa['STATEFP'] == '49') | # UT
+                     (geo_usa['STATEFP'] == '08') | # CO
+                     (geo_usa['STATEFP'] == '35')]  # NM
 
-    return(geo_merge)
-
-
-# geo_merge = draw_map(1) 
-# geo_merge.plot(column='PERC_LOSS',figsize=(25, 15),legend=True, cmap='Blues')
-# plt.xlim(-130,-60)
-# plt.ylim(20,55)
-# for i in range(len(geo_merge)):
-#     plt.text(geo_merge.LONG[i],geo_merge.LAT[i],"{}\n{}".format(geo_merge.NAME[i],geo_merge.PERC_LOSS[i]),size=10)
-# plt.title('% Loss due to cloud cover',fontsize=25)
-# plt.show()
+    return(df_new)

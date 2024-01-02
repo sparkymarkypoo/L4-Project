@@ -11,7 +11,8 @@ def PSMv3_API(latitude, longitude, year, interval):
                                             attributes=attributes, interval=interval,
                                             api_key='hQ8W1ZA3mLtMmrP7ee45addpSTwyh1Kid4rurDRc',
                                             email='mark.r.salkeld@gmail.com', leap_day=False,
-                                            full_name='Mark Salkeld', affiliation='pvlib python', timeout=30)
+                                            full_name='Mark Salkeld', affiliation='pvlib python', timeout=30,
+                                            map_variables=False)
     
     return data
 

@@ -15,38 +15,45 @@ import matplotlib.dates as mdates
 from Data.open_data import NRELdata
 
 # Import coordinates/plotting stuff
-from US_map import get_capitals
-from US_map import draw_map
+from US_map import county_map
+coords = county_map()
 
 # Choose time range:
 year = 2022
 start = np.datetime64(f'{year}-01-01T00:00') # 01-01T00:00 for whole year
 end = np.datetime64(f'{year}-12-30T23:55')   # 12-30T23:55 for whole year
 
-# # BSRN optional extra for 2022-05
-# from Data.open_data import BSRNdata
-# BSRN_time, BSRN_dir, BSRN_dif, BSRN_ghi = BSRNdata(start,end)
-
-# Coordinates for simulation (latitude, longitude, description)
-# coords = np.array([[36.626, -116.018, 'Desert_Rock']])
-coords, capitals = get_capitals()
-
 # Initialise looped variables
 clear_copy = []
 cloud_copy = []
 type_copy = []
 
+# Get the module and inverter specifications from SAM
+sandia_modules = pvlib.pvsystem.retrieve_sam('SandiaMod')
+cec_inverters = pvlib.pvsystem.retrieve_sam('CECinverter')
+module = sandia_modules['Canadian_Solar_CS5P_220M___2009_']
+inverter = cec_inverters['ABB__MICRO_0_25_I_OUTD_US_208__208V_']
+temperature = TEMPERATURE_MODEL_PARAMETERS['sapm']['open_rack_glass_glass']
+tilt = 30
+system = PVSystem(surface_azimuth=180, surface_tilt=tilt, module_parameters=module, inverter_parameters=inverter,
+                  temperature_model_parameters=temperature)#, albedo=data['Surface Albedo'])
+
+
 # Loop time!
-for i in coords:
+for index, row in coords.iterrows():
     
     # Get NSRDB data
-    latitude = round(float(i[0]),3)
-    longitude = round(float(i[1]),3)
-    name = i[2]
+    latitude = round(float(row['LAT']),3)
+    longitude = round(float(row['LONG']),3)
+    name = row['NAME']
     interval = 60 # in minutes
-    tilt = 30
-    data = NRELdata(start, end, year, latitude, longitude, name, interval)
-    # TODO return actual interval and use that - maybe not needed as I can't get API working outside of USA
+    
+    while True:
+        try:
+            data = NRELdata(start, end, year, latitude, longitude, name, interval)
+        except:
+            continue
+        break
     time = np.arange(start, end+5, dtype=f'datetime64[{interval}m]')
 
     # Define location
@@ -54,17 +61,7 @@ for i in coords:
                         altitude=900
                         #,tz='US/Pacific'
                         )
-
-    # Get the module and inverter specifications from SAM
-    sandia_modules = pvlib.pvsystem.retrieve_sam('SandiaMod')
-    cec_inverters = pvlib.pvsystem.retrieve_sam('CECinverter')
-    module = sandia_modules['Canadian_Solar_CS5P_220M___2009_']
-    inverter = cec_inverters['ABB__MICRO_0_25_I_OUTD_US_208__208V_']
-    temperature = TEMPERATURE_MODEL_PARAMETERS['sapm']['open_rack_glass_glass']
-    
-    system = PVSystem(surface_azimuth=180, surface_tilt=tilt, module_parameters=module, inverter_parameters=inverter,
-                      temperature_model_parameters=temperature)#, albedo=data['Surface Albedo'])
-    
+  
     #losses = pvlib.pvsystem.pvwatts_losses(soiling=2, shading=3, snow=0, mismatch=2, wiring=2, connections=0.5, lid=1.5, nameplate_rating=1, age=0, availability=3)
     
     # Define and run model
@@ -84,11 +81,11 @@ for i in coords:
    
     
 # Reformat saved list values
-clear_power = pd.DataFrame(clear_copy, index=capitals['CAPITAL'])
+clear_power = pd.DataFrame(clear_copy, index=coords['NAME'])
 clear_power = clear_power.T   # transpose
-cloud_power = pd.DataFrame(cloud_copy, index=capitals['CAPITAL'])
+cloud_power = pd.DataFrame(cloud_copy, index=coords['NAME'])
 cloud_power = cloud_power.T   # transpose
-cloud_type = pd.DataFrame(type_copy, index=capitals['CAPITAL'])
+cloud_type = pd.DataFrame(type_copy, index=coords['NAME'])
 cloud_type = cloud_type.T   # transpose
 
 # Errors
@@ -108,12 +105,14 @@ cloud_std = cloud_std.to_numpy()
 
 
 # Plot US map
-geo_merge = draw_map(perc_loss) 
-geo_merge.plot(column='PERC_LOSS',figsize=(25, 13),legend=True, cmap='Blues')
-plt.xlim(-127,-66)
-plt.ylim(24,50)
-for i in range(len(geo_merge)):
-    plt.text(geo_merge.LONG[i],geo_merge.LAT[i],"{}\n{}".format(geo_merge.CAPITAL[i],geo_merge.PERC_LOSS[i]),size=11)
+coords['PERC_LOSS'] = perc_loss
+coords.plot(column='PERC_LOSS',figsize=(25, 13),legend=True, cmap='Blues')
+# plt.xlim(-127,-66)
+# plt.ylim(24,50)
+# for index, row in coords.iterrows():
+#     plt.text(row.LONG,row.LAT,row.PERC_LOSS,size=11)
+plt.xlabel('Longitude')
+plt.ylabel('Latitude')
 plt.title('% Power loss due to cloud cover',fontsize=25)
 plt.show()
 
@@ -137,19 +136,9 @@ plt.show()
 # box['Cloud'] = cloud_power[location].to_numpy()
 # box['Perc_Diff'] = 100* box['Diff']/box['Clear']
 
-# type_label = ['Water','Super-Cooled Water','Mixed','Opaque Ice','Cirrus','Overlapping','Overshooting']
-# plt.figure(figsize=(10,10)) 
-# for i in range(3,10):
-#     cloud = box['Diff'][(box['Type'] == i) & (box['Diff'] != 0)]
-#     longth = len(cloud)
-#     plt.boxplot(cloud, positions = [i])
-# plt.ylabel('Difference in Power [W]')
-# plt.xlabel('Cloud Type')
-# plt.title('Power Loss by Cloud Type')
-
 # plt.figure(figsize=(10,10))   
 # for i in range(3,10):
-#     cloud = box['Perc_Diff'][(box['Type'] == i) & (box['Diff'] < 0) & (box['Cloud'] > 0) & (box['Clear'] > 0)]
+#     cloud = box['Perc_Diff'][(box['Type'] == i) & (box['Diff'] < 0) & (box['Cloud'] > 30) & (box['Clear'] > 0)]
 #     longth = len(cloud)
 #     plt.boxplot(cloud, positions = [i])
 # plt.ylabel('Difference in Power %')
