@@ -67,7 +67,7 @@ def NRELdata(start, end, year, latitude, longitude, name, interval): # For openi
     from NSRDB_API import PSMv3_API
 
     try:
-        df = pd.read_csv(rf'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data\{name}_lat{latitude}-long{longitude}_{year}_{interval}min.csv') # Try to open this
+        df = pd.read_csv(rf'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data\{name}_lat{latitude}-long{longitude}_{year}_{interval}min.csv', index_col=0) # Try to open this
     except:
         df = PSMv3_API(latitude, longitude, year, interval) # If it doesn't exist then run api request
                                                             # df = PSMv3_API(36.626,-116.018,2021,5)

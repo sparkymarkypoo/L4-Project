@@ -19,7 +19,7 @@ from US_map import county_map
 coords = county_map()
 
 # Choose time range:
-year = 2022
+year = 2020
 start = np.datetime64(f'{year}-01-01T00:00') # 01-01T00:00 for whole year
 end = np.datetime64(f'{year}-12-30T23:55')   # 12-30T23:55 for whole year
 
@@ -54,26 +54,28 @@ for index, row in coords.iterrows():
         except:
             continue
         break
-    time = np.arange(start, end+5, dtype=f'datetime64[{interval}m]')
 
     # Define location
     location = Location(latitude=latitude,longitude=0,#set to 0 as using UTC. Set to longitude if using local time.
-                        altitude=900
-                        #,tz='US/Pacific'
+                        altitude=pvlib.location.lookup_altitude(latitude=latitude, longitude=longitude)
+                        #,tz='US/Pacific'  #default is UTC
                         )
+    
+    str_time = pd.to_datetime(data.index)
+    time = str_time.tz_localize(None)
   
     #losses = pvlib.pvsystem.pvwatts_losses(soiling=2, shading=3, snow=0, mismatch=2, wiring=2, connections=0.5, lid=1.5, nameplate_rating=1, age=0, availability=3)
     
     # Define and run model
     modelchain = ModelChain(system, location, spectral_model='sapm') # location and system have no default so must be specified
-    
+     
     clear_data = pd.DataFrame({'ghi':data['Clearsky GHI'], 'dni':data['Clearsky DNI'], 'dhi':data['Clearsky DHI'], 'temp_air':data['Temperature'], 'wind_speed':data['Wind Speed']})
-    clear_data.index = pd.date_range(start,end,freq=f'{interval}min')
+    clear_data.index = time
     clear_run = modelchain.run_model(clear_data)
     clear_copy.append(clear_run.results.ac) # Model chain gets overwritten so save results
     
     cloud_data = pd.DataFrame({'ghi':data['GHI'], 'dni':data['DNI'], 'dhi':data['DHI'], 'temp_air':data['Temperature'], 'wind_speed':data['Wind Speed']})
-    cloud_data.index = pd.date_range(start,end,freq=f'{interval}min')
+    cloud_data.index = time
     cloud_run = modelchain.run_model(cloud_data)
     cloud_copy.append(cloud_run.results.ac)
     
@@ -116,19 +118,10 @@ plt.ylabel('Latitude')
 plt.title('% Power loss due to cloud cover',fontsize=25)
 plt.show()
 
-# geo_merge = draw_map(cloud_average) 
-# geo_merge.plot(column='PERC_LOSS',figsize=(25, 13),legend=True, cmap='Blues')
-# plt.xlim(-127,-66)
-# plt.ylim(24,50)
-# for i in range(len(geo_merge)):
-#     plt.text(geo_merge.LONG[i],geo_merge.LAT[i],"{}\n{}".format(geo_merge.CAPITAL[i],geo_merge.PERC_LOSS[i]),size=11)
-# plt.title('Cloud type average',fontsize=25)
-# plt.show()
-
 
 
 # # Plot box plots
-# location = 'Olympia'
+# location = 'Alameda'
 # box = pd.DataFrame(data=cloud_type[location])
 # box = box.rename(columns={location: "Type"})
 # box['Diff'] = diff[location].to_numpy()
@@ -138,7 +131,7 @@ plt.show()
 
 # plt.figure(figsize=(10,10))   
 # for i in range(3,10):
-#     cloud = box['Perc_Diff'][(box['Type'] == i) & (box['Diff'] < 0) & (box['Cloud'] > 30) & (box['Clear'] > 0)]
+#     cloud = box['Perc_Diff'][(box['Type'] == i) & (box['Diff'] < 0) & (box['Cloud'] > 0) & (box['Clear'] > 30)]
 #     longth = len(cloud)
 #     plt.boxplot(cloud, positions = [i])
 # plt.ylabel('Difference in Power %')
@@ -168,10 +161,10 @@ plt.show()
 
 
 # # Measured vs Simulated Irradiance
-# plt.scatter(data['GHI'],BSRN_ghi, c=data['Cloud Type'])
+# plt.scatter(clear_power['Alameda'], cloud_power['Alameda'], c=cloud_type['Alameda'])
 # plt.colorbar()
-# plt.ylabel('Measured Irradiance')
-# plt.xlabel('NSRDB Irradiance')
+# plt.ylabel('All sky')
+# plt.xlabel('Clearsky')
 # plt.title('Simulated vs Actual Irradiance, colored by Cloud Type')
 
 # # Power loss by cloud type
@@ -179,3 +172,14 @@ plt.show()
 # plt.colorbar()
 # plt.ylabel('Difference in Power [W]')
 # plt.xlabel('Cloud Type')
+
+
+# for i in range(1,13):
+    
+#     diff_stepped = diff[(time.month == i)]
+#     clear_power_stepped = clear_power[(time.month == i)]
+    
+#     loss_stepped = np.trapz(-diff_stepped, dx=interval*60, axis=0) # dx is time in seconds
+#     perc_loss_stepped = loss_stepped/np.trapz(clear_power_stepped, dx=interval*60, axis=0)*100
+#     perc_loss_stepped = perc_loss_stepped.round(1)
+
