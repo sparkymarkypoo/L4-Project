@@ -60,29 +60,17 @@ def radiationdata(): # REDUNDANT - was used for opening CAMS radiation datasets
     return GHI_all, GHI_clear, rad_time
 
 
-def NRELdata(start, end, year, latitude, longitude, name, interval): # For opening NREL psmv3 data
-    
-    import numpy as np
+def NRELdata(year, latitude, longitude, name, interval): # For opening NREL psmv3 data
+
     import pandas as pd
     from NSRDB_API import PSMv3_API
 
     try:
-        df = pd.read_csv(rf'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data\{name}_lat{latitude}-long{longitude}_{year}_{interval}min.csv', index_col=0) # Try to open this
+        NSRDB_data = pd.read_csv(rf'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data\{name}_lat{latitude}-long{longitude}_{year}_{interval}min.csv', index_col=0) # Try to open this
     except:
-        df = PSMv3_API(latitude, longitude, year, interval) # If it doesn't exist then run api request
+        NSRDB_data = PSMv3_API(latitude, longitude, year, interval) # If it doesn't exist then run api request
                                                             # df = PSMv3_API(36.626,-116.018,2021,5)
-        df.to_csv(rf'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data\{name}_lat{latitude}-long{longitude}_{year}_{interval}min.csv')
-
-    # Get range of time we want
-    complete_time = np.arange('%s-01-01' %(year), '%s-12-31' %(year), dtype=f'datetime64[{interval}m]')
-    i = j = 0   
-    for t in complete_time:
-        if start > t:
-            i=i+1      
-        elif start <= t <= end:
-            j=j+1
-    
-    NSRDB_data = df[i:i+j]  # select the times we want
+        NSRDB_data.to_csv(rf'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data\{name}_lat{latitude}-long{longitude}_{year}_{interval}min.csv')
 
     return NSRDB_data
 
@@ -116,3 +104,10 @@ def BSRNdata(start, end): # For opening Baseline Surface Radiation Network data
     BSRN_ghi = temp_[i:i+j:5]
     
     return BSRN_time, BSRN_dir, BSRN_dif, BSRN_ghi
+
+
+def format_looped_data(copy, dataframe, time, modelchain):
+    dataframe.index = time
+    run = modelchain.run_model(dataframe)
+    copy.append(run.results.ac)
+    return copy

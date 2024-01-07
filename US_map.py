@@ -10,11 +10,13 @@ def county_map():
     geo_usa['LONG'] = geo_usa.centroid.map(lambda p: p.x)
     
     # Select states
+    #df_new = geo_usa[(geo_usa['STATEFP'] == '06')]
+    
     df_new = geo_usa[(geo_usa['STATEFP'] == '06') | # CA
-                     (geo_usa['STATEFP'] == '32') | # NV
-                     (geo_usa['STATEFP'] == '04') | # AR
-                     (geo_usa['STATEFP'] == '49') | # UT
-                     (geo_usa['STATEFP'] == '08') | # CO
-                     (geo_usa['STATEFP'] == '35')]  # NM
+                      (geo_usa['STATEFP'] == '32') | # NV
+                      (geo_usa['STATEFP'] == '04') | # AR
+                      (geo_usa['STATEFP'] == '49') | # UT
+                      (geo_usa['STATEFP'] == '08') | # CO
+                      (geo_usa['STATEFP'] == '35')]  # NM
 
     return(df_new)
