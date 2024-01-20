@@ -4,7 +4,7 @@ save_data_on_exit = True
 save_history = True
 save_non_project_files = False
 project_type = 'empty-project-type'
-recent_files = ['pvlib\\modelchain_counties.py', 'Data\\open_data.py', 'NSRDB_API.py', 'US_map.py', 'pvlib\\modelchain_yearly.py']
+recent_files = ['pvlib\\modelchain_counties.py', 'Data\\open_data.py', 'NSRDB_API.py', 'US_map.py', 'pvlib\\modelchain_yearly.py', 'pvlib\\modelchain_azimuth.py', 'pvlib\\spect_response.py', 'pvlib\\spec_response_function.py']
 
 [main]
 version = 0.2.0
