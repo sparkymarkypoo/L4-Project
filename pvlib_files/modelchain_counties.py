@@ -32,11 +32,9 @@ cec_inverters = pvlib.pvsystem.retrieve_sam('CECinverter')
 module = sandia_modules['Canadian_Solar_CS5P_220M___2009_']
 inverter = cec_inverters['ABB__MICRO_0_25_I_OUTD_US_208__208V_']
 temperature = TEMPERATURE_MODEL_PARAMETERS['sapm']['open_rack_glass_glass']
-tilt = 30
-system = PVSystem(surface_azimuth=180, surface_tilt=tilt, module_parameters=module, inverter_parameters=inverter,
-                  temperature_model_parameters=temperature)#, albedo=data['Surface Albedo'])
 
-
+# TEMPORARY ADJUSTMENT TO SAVE TIME
+coords = coords[coords['STATEFP']=='06']
 # Loop time!
 for index, row in coords.iterrows():
     
@@ -53,18 +51,19 @@ for index, row in coords.iterrows():
             continue
         break
 
-    # Define location
+    # Define location and system
     location = Location(latitude=latitude,longitude=longitude,#set to 0 as using UTC. Set to longitude if using local time.
                         altitude=pvlib.location.lookup_altitude(latitude=latitude, longitude=longitude)
                         #,tz='US/Pacific'  #default is UTC
                         )
+    tilt = round(latitude,1)
+    system = PVSystem(surface_azimuth=180, surface_tilt=tilt, module_parameters=module, inverter_parameters=inverter,
+                      temperature_model_parameters=temperature)#, albedo=data['Surface Albedo'])
     
-    time = pd.to_datetime(data.index)
   
-    #losses = pvlib.pvsystem.pvwatts_losses(soiling=2, shading=3, snow=0, mismatch=2, wiring=2, connections=0.5, lid=1.5, nameplate_rating=1, age=0, availability=3)
-    
     # Define and run model
-    modelchain = ModelChain(system, location, spectral_model='sapm') # location and system have no default so must be specified
+    time = pd.to_datetime(data.index)
+    modelchain = ModelChain(system, location, dc_model='sapm', spectral_model='sapm', aoi_model='no_loss')
      
     clear_data = pd.DataFrame({'ghi':data['Clearsky GHI'], 'dni':data['Clearsky DNI'], 'dhi':data['Clearsky DHI'], 'temp_air':data['Temperature'], 'wind_speed':data['Wind Speed']})
     clear_data.index = time
@@ -154,8 +153,8 @@ for (columnName, columnData) in cloud_monthly_no.iteritems():
 #coords['CUSTOM'] = cloud_county_no.to_numpy()
 #coords['CUSTOM'] = eff_mean.to_numpy()
 #coords['CUSTOM'] = energy_tot
-coords['CUSTOM'] = Rsquared
-#coords['PERC_LOSS'] = perc_loss
+#coords['CUSTOM'] = Rsquared
+coords['CUSTOM'] = perc_loss
 figmap = coords.plot(column='CUSTOM',figsize=(25, 13),legend=True, cmap='coolwarm')
 plt.xlabel('Longitude',fontsize=20)
 plt.ylabel('Latitude',fontsize=20)
@@ -190,49 +189,26 @@ ax2.tick_params(labelsize=14)
 plt.show()
 
 
-# Plot box plots
-cloud = []
-for location in diff:
-    box = pd.DataFrame(data=cloud_type[location])
-    box = box.rename(columns={location: "Type"})
-    box['Diff'] = diff[location].to_numpy()
-    box['Clear'] = clear_power[location].to_numpy()
-    box['Cloud'] = cloud_power[location].to_numpy()
-    box['Perc_Diff'] = 100* box['Diff']/box['Clear']
-    for i in range(3,10):
-        pd_cloud = box['Perc_Diff'][(box['Type'] == i) & (box['Diff'] < 0) & (box['Cloud'] > 0) & (box['Clear'] > 30)]
-        cloud.append(-pd_cloud.values)
-plt.figure(figsize=(10,10))   
-for i in range(3,10):
-    flat_list = []
-    for row in cloud[i - 3::7]:
-        flat_list.extend(row)
-    plt.boxplot(flat_list, positions = [i])
-plt.ylabel('% Power loss due to cloud', fontsize=18)
-plt.xlabel('Cloud Type', fontsize=18)
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-
-
-
-
-# # Time Series Plot
-# fig, ax1 = plt.subplots(figsize=(20,10))
-# plt.ylim(0,300)
-# plt.xlabel("Day")
-# plt.ylabel("DC Power W")
-# plt.title(f"Lat({latitude})-Long({longitude}) {start} to {end}")
-# ax1.grid()
-# ax1.xaxis.set_major_locator(mdates.DayLocator()) # Make ticks one per day
-# ax1.xaxis.set_major_formatter(mdates.DateFormatter('%d'))
-# ax1.plot(time, cloud_power['Desert Rock'], label = 'Power (Cloud)')
-# ax1.plot(time, clear_power['Desert Rock'], label = 'Power (Clear)')
-# ax2 = ax1.twinx()
-# # Error
-# ax2.plot(time, diff['Desert Rock'], label='Difference',color='red')
-# # Legends
-# ax1.legend(loc='upper left')
-# ax2.legend(loc='upper right')
-# plt.show()
-
+# # Plot box plots
+# cloud = []
+# for location in diff:
+#     box = pd.DataFrame(data=cloud_type[location])
+#     box = box.rename(columns={location: "Type"})
+#     box['Diff'] = diff[location].to_numpy()
+#     box['Clear'] = clear_power[location].to_numpy()
+#     box['Cloud'] = cloud_power[location].to_numpy()
+#     box['Perc_Diff'] = 100* box['Diff']/box['Clear']
+#     for i in range(3,10):
+#         pd_cloud = box['Perc_Diff'][(box['Type'] == i) & (box['Diff'] < 0) & (box['Cloud'] > 0) & (box['Clear'] > 30)]
+#         cloud.append(-pd_cloud.values)
+# plt.figure(figsize=(10,10))   
+# for i in range(3,10):
+#     flat_list = []
+#     for row in cloud[i - 3::7]:
+#         flat_list.extend(row)
+#     plt.boxplot(flat_list, positions = [i])
+# plt.ylabel('% Power loss due to cloud', fontsize=18)
+# plt.xlabel('Cloud Type', fontsize=18)
+# plt.xticks(fontsize=14)
+# plt.yticks(fontsize=14)
 

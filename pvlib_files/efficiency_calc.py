@@ -8,13 +8,14 @@ from pvlib.pvarray import pvefficiency_adr
 from pvlib_files.spec_response_function import calc_spectral_modifier
 
 # Get data
-data = pd.read_csv(r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Grid/2021-204887-fixed_tilt.csv', skiprows=2)
+data = pd.read_csv(r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Spectral/2021-204887-fixed_tilt.csv', skiprows=2)
 
 
 # Reformat for modelling
 df = pd.DataFrame({'ghi':data['GHI'], 'dni':data['DNI'],
                    'dhi':data['DHI'], 'temp_air':data['Temperature'],
-                   'wind_speed':data['Wind Speed']})
+                   'wind_speed':data['Wind Speed'],
+                   'cloud':data['Cloud Type']})
 time_pd = data[['Year', 'Month', 'Day', 'Hour', 'Minute']]
 time = pd.to_datetime(time_pd)
 df.index = time
@@ -34,8 +35,8 @@ azi = 180
 total_irrad = get_total_irradiance(tilt, azi,
                                    solpos.apparent_zenith, solpos.azimuth,
                                    df.dni, df.ghi, df.dhi)
-spec_mismatch = calc_spectral_modifier()
-df['poa_global'] = total_irrad.poa_global * spec_mismatch
+spec_mismatch, poa = calc_spectral_modifier()
+df['poa_global'] = total_irrad.poa_global * spec_mismatch['mono-Si']
 
 
 # Module parameters

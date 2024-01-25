@@ -35,8 +35,7 @@ end = np.datetime64(f'{year}-02-28T00:00')
 latitude = 36.626
 longitude = -116.018 
 interval = 5 # in minutes
-data = NRELdata(start, end, year, latitude, longitude, interval)
-FARMS_time = np.arange(start, end+5, dtype=f'datetime64[{interval}m]')
+data = pd.read_csv(r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Acadia_lat30.291-long-92.412_2022_60min.csv')
 
 # Location
 surface_azimuth=180
