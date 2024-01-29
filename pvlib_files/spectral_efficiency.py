@@ -47,9 +47,10 @@ df = pd.DataFrame({'temp_air':data['Temperature'], 'wind_speed':data['Wind Speed
 mpp = pd.DataFrame(columns = types)
 eta_rel = pd.DataFrame(columns = types)
 i = 0
+spec_mismatch = pd.DataFrame(columns=types)
 for material in modules.loc['Technology']:
-    spec_mismatch, df['poa_global'] = calc_spectral_modifier(material)
-    df['effective_irradiance'] = df['poa_global'] * spec_mismatch
+    spec_mismatch[material], df['poa_global'] = calc_spectral_modifier(material)
+    df['effective_irradiance'] = df['poa_global'] * spec_mismatch[material]
     df = df.fillna(0)
     
     
@@ -66,47 +67,44 @@ for material in modules.loc['Technology']:
     eta_rel[material] = (mpp[material] / modules.loc['STC'].iloc[i]) / (df['poa_global'] / 1000)
     i=i+1
 
-    # Plots
-    plt.figure()
-    pc = plt.scatter(df['poa_global'], eta_rel[material], c=temp_cell, cmap='jet')
-    plt.colorbar(label='Temperature [C]', ax=plt.gca())
-    pc.set_alpha(0.25)
-    plt.grid(alpha=0.5)
-    plt.ylim(0.48)
-    plt.xlabel('POA Irradiance [W/m²]')
-    plt.ylabel('Relative efficiency [-]')
-    plt.show()
-    
+    # # Plots
     # plt.figure()
-    # pc = plt.scatter(df['poa_global'], mpp[material], c=temp_cell, cmap='jet')
+    # pc = plt.scatter(df['poa_global'], eta_rel[material], c=temp_cell, cmap='jet')
     # plt.colorbar(label='Temperature [C]', ax=plt.gca())
     # pc.set_alpha(0.25)
     # plt.grid(alpha=0.5)
+    # plt.ylim(0.48)
     # plt.xlabel('POA Irradiance [W/m²]')
-    # plt.ylabel('Array power [W]')
+    # plt.ylabel('Relative efficiency [-]')
     # plt.show()
     
-    plt.figure()
-    pc = plt.scatter(df['poa_global'], spec_mismatch, c=df['cloud'], cmap='jet')
-    plt.colorbar(label='Cloud Type', ax=plt.gca())
-    pc.set_alpha(0.25)
-    plt.grid(alpha=0.5)
-    plt.xlabel('POA Irradiance [W/m²]')
-    plt.ylabel('Spectral Mismatch (-)')
-    plt.show()
+    # plt.figure()
+    # pc = plt.scatter(df['poa_global'], spec_mismatch[material], c=df['cloud'], cmap='jet')
+    # plt.colorbar(label='Cloud Type', ax=plt.gca())
+    # pc.set_alpha(0.25)
+    # plt.grid(alpha=0.5)
+    # plt.xlabel('POA Irradiance [W/m²]')
+    # plt.ylabel('Spectral Mismatch (-)')
+    # plt.show()
     
 
 mpp.index = time
 eta_rel.index = time
 df.index = time
+spec_mismatch.index = time
 
 mpp_monthly = mpp.resample('M').apply(np.trapz)
 eta_rel_monthly = eta_rel.resample('M').apply(np.mean)
 poa_monthly = df['poa_global'].resample('M').apply(np.trapz)
+spec_mismatch_monthly = spec_mismatch[spec_mismatch>0].resample('M').apply(np.mean)
 
 ax = plt.figure(figsize=(10,6))
 ax = eta_rel_monthly.plot()
 ax.set_ylabel("Mean Relative Efficiency")
+
+ax = plt.figure(figsize=(10,6))
+ax = spec_mismatch_monthly.plot()
+ax.set_ylabel("Mean Spectral Mismatch")
 
 
 plt.figure()
