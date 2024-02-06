@@ -42,7 +42,7 @@ surface_azimuth=180
 surface_tilt=37
 
 # Calculate cell parameters
-temp_cell = pvlib.temperature.faiman(data['GHI'], data['Temperature'], data['Wind Speed'])
+temp_cell = pvlib.temperature.faiman(data['poa_global'], data['Temperature'], data['Wind Speed'])
 
 I_L_ref, I_o_ref, R_s, R_sh_ref, a_ref, Adjust = pvlib.ivtools.sdm.fit_cec_sam(
     celltype=celltype,

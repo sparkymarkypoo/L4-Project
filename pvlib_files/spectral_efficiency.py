@@ -55,7 +55,7 @@ for material in modules.loc['Technology']:
     
     
     # Calculate cell parameters
-    temp_cell = pvlib.temperature.faiman(data['GHI'], data['Temperature'], data['Wind Speed'])
+    temp_cell = pvlib.temperature.faiman(data['poa_global'], data['Temperature'], data['Wind Speed'])
     cec_params = pvlib.pvsystem.calcparams_cec(df['effective_irradiance'], temp_cell, modules.loc['alpha_sc'].iloc[i],
                                                modules.loc['a_ref'].iloc[i], modules.loc['I_L_ref'].iloc[i],
                                                modules.loc['I_o_ref'].iloc[i], modules.loc['R_sh_ref'].iloc[i],

@@ -1,65 +1,4 @@
 
-def CAMSdata(start,end): # REDUNDANT - was used for extracting variables from Copernicus CAMS data
-                                     # for use in the SMARTS model
-
-    import xarray as xr
-    
-    sdf = xr.open_dataset(r'C:\Users\mark\Documents\L4-Project-Code\Copernicus\Desert Rock\Cop_dra_single.nc', engine='netcdf4')
-    mdf = xr.open_dataset(r'C:\Users\mark\Documents\L4-Project-Code\Copernicus\Desert Rock\Cop_dra_multi.nc', engine='netcdf4')
-    
-    longit = sdf.longitude.values[0]
-    latit = sdf.latitude.values[0]
-    
-    # Get range of time we want
-    complete_time = sdf.time.values
-    i = j = 0   
-    for t in complete_time:
-        if start > t:
-            i=i+1      
-        elif start <= t <= end:
-            j=j+1
-        
-    # extract the variables from the data           
-    pressure = sdf.sp.values[i:i+j,0,0]/100 # convert to mbar
-    ad550 = sdf.aod550.values[i:i+j,0,0] # aerosol depth
-    tc_o3 = sdf.gtco3.values[i:i+j,0,0]/10 # total column ozone kg/m2 to g/cm2
-    tc_wv = sdf.tcwv.values[i:i+j,0,0]/10 # total column water vapour kg/m2 to g/cm2
-    total_cloud = sdf.tcc.values[i:i+j,0,0]
-    time = sdf.time.values[i:i+j]
-    
-    temp = mdf.t.values[i:i+j,0,0]-273.15 # temperature K to C
-    #humid = mdf.r.values[i:i+j,0,0] # relative humidity THIS IS MISSING REEEEE
-    
-    m_air = 28.96 # molar mass of dry air
-    # ppmv = kg/kg * (m_air/m_x) * 1e6
-    ch2o = mdf.hcho.values[i:i+j,0,0] * (m_air/30.03) * 1e6
-    ch4 = mdf.ch4_c.values[i:i+j,0,0] * (m_air/16.04) * 1e6
-    co = mdf.co.values[i:i+j,0,0] * (m_air/28.01) * 1e6
-    o3 = mdf.go3.values[i:i+j,0,0] * (m_air/48.00) * 1e6
-    hno3 = mdf.hno3.values[i:i+j,0,0] * (m_air/63.01) * 1e6
-    no2 = mdf.no2.values[i:i+j,0,0] * (m_air/46.01) * 1e6
-    no = mdf.no.values[i:i+j,0,0] * (m_air/30.01) * 1e6
-    so2 = mdf.so2.values[i:i+j,0,0]  * (m_air/64.07) * 1e6
-
-    return longit, latit, pressure, ad550, tc_o3, tc_wv, total_cloud, time, temp, ch2o, ch4, co, o3, hno3, no2, no, so2
-
-# pressure, ad550, time, temp, sp_humid, ch2o, ch4, co, o3, hno3, no2, no, so2 = CAMSdata()
-
-
-def radiationdata(): # REDUNDANT - was used for opening CAMS radiation datasets
-
-    import xarray as xr
-
-    df = xr.open_dataset(r'C:\Users\mark\Documents\L4-Project-Code\Copernicus\radiation.nc', engine='netcdf4')
-
-    # extract the temperature from the data
-    GHI_all = df.GHI.values[:,0,0,0]
-    GHI_clear = df.CLEAR_SKY_GHI.values[:,0,0,0]
-    rad_time = df.time.values
-    
-    return GHI_all, GHI_clear, rad_time
-
-
 def NRELdata(year, latitude, longitude, name, interval): # For opening NREL psmv3 data
 
     import pandas as pd
@@ -74,7 +13,37 @@ def NRELdata(year, latitude, longitude, name, interval): # For opening NREL psmv
 
     return NSRDB_data
 
+
+
+def open_aod550(): # for opening aod550 data in netcdf format (from copernicus ads)
+                   # needed for validation_sandia
+    import xarray as xr
+    import numpy as np
+    import pandas as pd
+
+    # open data
+    df = xr.open_dataset(r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Data For Validating Models/Sandia/aod550.nc', engine='netcdf4')
+
+    # extract the variables from the data
+    aod550_ = np.squeeze(df['aod550'].values)
+    time = df.time.values
+
+    # interpolate
+    time_smooth = pd.date_range(time[0], time[-1], freq='1h')
+    from scipy.interpolate import make_interp_spline
+    spl = make_interp_spline(time, aod550_, k=3)  # type: BSpline
+    aod550_smooth = spl(time_smooth)
+    
+    # time zone
+    time_smooth = time_smooth + pd.DateOffset(hours=-7)
+    
+    # reformat
+    aod550 = pd.Series(index=time_smooth, data=aod550_smooth)
+    
+    return aod550
+
  
+
 def BSRNdata(start, end): # For opening Baseline Surface Radiation Network data
    
     import numpy as np
@@ -104,6 +73,7 @@ def BSRNdata(start, end): # For opening Baseline Surface Radiation Network data
     BSRN_ghi = temp_[i:i+j:5]
     
     return BSRN_time, BSRN_dir, BSRN_dif, BSRN_ghi
+
 
 
 def format_looped_data(copy, dataframe, time, modelchain):
