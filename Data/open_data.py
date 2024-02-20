@@ -15,14 +15,14 @@ def NRELdata(year, latitude, longitude, name, interval): # For opening NREL psmv
 
 
 
-def open_aod550(): # for opening aod550 data in netcdf format (from copernicus ads)
+def open_aod550(location, tz_offset): # for opening aod550 data in netcdf format (from copernicus ads)
                    # needed for validation_sandia
     import xarray as xr
     import numpy as np
     import pandas as pd
 
     # open data
-    df = xr.open_dataset(r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Data For Validating Models/Sandia/aod550.nc', engine='netcdf4')
+    df = xr.open_dataset(rf'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Data For Validating Models/aod550/{location}_aod550.nc', engine='netcdf4')
 
     # extract the variables from the data
     aod550_ = np.squeeze(df['aod550'].values)
@@ -35,7 +35,7 @@ def open_aod550(): # for opening aod550 data in netcdf format (from copernicus a
     aod550_smooth = spl(time_smooth)
     
     # time zone
-    time_smooth = time_smooth + pd.DateOffset(hours=-7)
+    time_smooth = time_smooth + tz_offset
     
     # reformat
     aod550 = pd.Series(index=time_smooth, data=aod550_smooth)
@@ -43,6 +43,37 @@ def open_aod550(): # for opening aod550 data in netcdf format (from copernicus a
     return aod550
 
  
+
+def open_copernicus(lat, long, tz_offset): # for opening aod550 data in netcdf format (from copernicus ads)
+                   # needed for validation_sandia
+    import xarray as xr
+    import numpy as np
+    import pandas as pd
+
+    # open data
+    df = xr.open_dataset(rf'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Copernicus/{lat}_{long}_cop.nc', engine='netcdf4')
+
+    # extract the variables from the data
+    cop_ = df.to_dataframe()
+    time = df.time.values
+    cop_.index = time
+    cols = cop_.columns
+
+    # interpolate
+    time_smooth = pd.date_range(time[0], time[-1], freq='1h')
+    from scipy.interpolate import make_interp_spline
+    spl = make_interp_spline(time, cop_, k=3)  # type: BSpline
+    cop_smooth = spl(time_smooth)
+    
+    # time zone
+    time_smooth = time_smooth + tz_offset
+    
+    # reformat
+    cop = pd.DataFrame(index=time_smooth, data=cop_smooth, columns = cols)
+    
+    return cop
+
+
 
 def BSRNdata(start, end): # For opening Baseline Surface Radiation Network data
    

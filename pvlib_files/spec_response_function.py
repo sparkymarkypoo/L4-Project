@@ -1,4 +1,7 @@
 
+# pd.set_option('display.max_columns', 10)
+# pd.set_option('display.width', 120)
+
 def calc_spectral_modifier(pv_name, spectrum_data):
 
     import pvlib
@@ -12,6 +15,7 @@ def calc_spectral_modifier(pv_name, spectrum_data):
     
     
     # Material
+    pv_name = pv_name.replace('-','')
     types = ['monoSi', 'multiSi', 'cigs', 'cdte', 'amorphous'] #'polySi', 'cis', '
     for t in types:
         if t.lower() in pv_name.lower():
@@ -43,7 +47,7 @@ def calc_spectral_modifier(pv_name, spectrum_data):
     # Find and filter nagtive (bad) values
     neg_values = (spectrum < 0).any(1)
     neg_index = neg_values.index[neg_values].tolist()
-    poa.loc[neg_index] = 0
+    poa.loc[neg_index] = np.nan
     
     
     # Get AM1.5
