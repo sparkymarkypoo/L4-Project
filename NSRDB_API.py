@@ -36,15 +36,11 @@ def spectral_on_demand_API(lat, long, year, tilt):
 import pandas as pd
 import time
 
-sf = pd.read_csv('C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/FINAL/US_Solar_Farms_Cropped.csv', index_col='p_state')
-# sf = sf.drop(index = 'AL')
-# sf = sf.drop(index = 'AR')
-sf = sf.drop(index = 'AZ')
-# sf = sf.drop(index = 'CA')
-for loc in sf.index:
-    for y in range(2018,2022):
+coords = pd.read_csv('C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/FINAL/US_State_Centres.csv', index_col='STATEFP')
+for loc in coords.index:
+    for y in range(2021,2022):
         while True:
-            response = spectral_on_demand_API(lat=sf['ylat'].loc[loc], long=sf['xlong'].loc[loc], year=y, tilt=sf['opt_tilt'].loc[loc])
+            response = spectral_on_demand_API(lat=coords['LAT'].loc[loc], long=coords['LONG'].loc[loc], year=y, tilt=coords['opt_tilt'].loc[loc])
             if response.ok == True:
                 print('Passed:', loc, y)
                 time.sleep(2)
@@ -52,3 +48,16 @@ for loc in sf.index:
             else:
                 print('Failed:', loc, y)
                 time.sleep(60*2)
+
+# sf = pd.read_csv('C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/FINAL/US_Solar_Farms_Cropped.csv', index_col='p_state')
+# for loc in sf.index:
+#     for y in range(2018,2022):
+#         while True:
+#             response = spectral_on_demand_API(lat=sf['ylat'].loc[loc], long=sf['xlong'].loc[loc], year=y, tilt=sf['opt_tilt'].loc[loc])
+#             if response.ok == True:
+#                 print('Passed:', loc, y)
+#                 time.sleep(2)
+#                 break
+#             else:
+#                 print('Failed:', loc, y)
+#                 time.sleep(60*2)

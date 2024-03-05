@@ -16,7 +16,7 @@ def calc_spectral_modifier(pv_name, spectrum_data):
     
     # Material
     pv_name = pv_name.replace('-','')
-    types = ['monoSi', 'multiSi', 'cigs', 'cdte', 'amorphous'] #'polySi', 'cis', '
+    types = ['monoSi', 'multiSi', 'cigs', 'cdte', 'amorphous', 'triple', 'perovskite', 'perovskitesi']
     for t in types:
         if t.lower() in pv_name.lower():
             material = t

@@ -4,7 +4,8 @@ from shapely.geometry import Point
 from US_map import state_map
 coords = state_map()
 
-folder = 'D:/NSRDB_Data'
+#folder = 'D:/NSRDB_Data'
+folder = 'C:/Users/mark/Downloads/NSRDB_Downloads'
 arr = os.listdir(folder)
 
 for a in arr:

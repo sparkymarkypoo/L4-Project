@@ -7,15 +7,17 @@ import numpy as np
 sandia_mods = pvlib.pvsystem.retrieve_sam(name='SandiaMod')
 sandia_mats = sandia_mods.T['Material']
 print(sandia_mats.unique())
-sandia_ = sandia_mods.T
-canad = sandia_[sandia_mods.index.str.contains('Canad')]
+# sandia_ = sandia_mods.T
+# canad = sandia_[sandia_mods.index.str.contains('Canad')]
 
 
 
 # #['Mono-c-Si' 'Multi-c-Si' 'Thin Film' 'CdTe' 'CIGS']
 
-# cec_mods_ = pvlib.pvsystem.retrieve_sam(name='CECMod')
-# cec_mods = cec_mods_.T
+cec_mods_ = pvlib.pvsystem.retrieve_sam(name='CECMod')
+cec_mods = cec_mods_.T
+cec_mats = cec_mods['Technology']
+print(cec_mats.unique())
 
 # xun = cec_mods[cec_mods.index.str.contains('Xun')]
 

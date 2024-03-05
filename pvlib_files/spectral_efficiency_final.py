@@ -5,36 +5,60 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import time as stopwatch
+import scipy
 
 # Import coordinates/plotting stuff
 from US_map import state_map
 coords = state_map()
 from pvlib_files.spec_response_function import calc_spectral_modifier
-
+from Data.open_data import open_aod550_final
 
 
 # Define solar panel parameters
-SAM_URL = 'https://github.com/NREL/SAM/raw/develop/deploy/libraries/CEC%20Modules.csv'
-CEC_mods = pvlib.pvsystem.retrieve_sam(path=SAM_URL)
-modules = CEC_mods[['First_Solar_Inc__FS_7530A_TR1','Miasole_FLEX_03_480W','Jinko_Solar_Co__Ltd_JKM340PP_72','Jinko_Solar_Co__Ltd_JKMS350M_72']]
-CEC_mods = pvlib.pvsystem.retrieve_sam(name='CECMod')
-modules['Xunlight_XR36_300'] = CEC_mods['Xunlight_XR36_300']
-types = ['CdTe','CIGS','multi-Si','mono-Si','a-Si']
-modules.loc['Technology'] = types
+sheet = pd.read_csv('C:/Users/mark/Documents/L4-Project-Code/Data/spec_sheets.csv', index_col=0)#, dtype=np.float64)#dtype={'cell_type':str})
+modules = pd.DataFrame(columns=sheet.columns, index=['pstc', 'area', 'alpha_sc', 'I_L_ref', 'I_o_ref', 'R_s', 'R_sh_ref', 'a_ref', 'Adjust'])
+
+for s in sheet:
+
+    pstc = sheet[s].loc['pstc']
+    area = sheet[s].loc['area']
+    alpha_sc = sheet[s].loc['alpha_sc'] * sheet[s].loc['isc']/100
+    
+    params = pvlib.ivtools.sdm.fit_cec_sam(
+        celltype = s,
+        v_mp = sheet[s].loc['vmp'],
+        i_mp = sheet[s].loc['imp'],
+        v_oc = sheet[s].loc['voc'],
+        i_sc = sheet[s].loc['isc'],
+        alpha_sc = alpha_sc,
+        beta_voc = sheet[s].loc['beta_voc'] * sheet[s].loc['voc']/100,
+        gamma_pmp = sheet[s].loc['gamma_pmp'],
+        cells_in_series = sheet[s].loc['cells_in_series'])
+
+    modules[s] = (pstc, area, alpha_sc) + params
+types1 = ['CdTe','CIGS','multi-Si','mono-Si','a-Si']   # THESE ONES FOR POWER SIM
+modules.loc['Technology'] = types1
+types2 = ['perovskite','perovskite-si','triple']       # THESE ONES ONLY FOR POA SIM
+types = types1 + types2
 
 
 # Find NSRDB data
-folder = 'D:/NSRDB_Data'
+# folder = 'D:/NSRDB_Data'
+folder = 'C:/Users/mark/Downloads/NSRDB_Downloads'
 arr = os.listdir(folder)
 year = '2021'
-#year = '8_year2021_nsrdb.csv'
+#year = '38_year2021_nsrdb.csv'
 arr2 = [k for k in arr if year in k]
 states = [sub[5:7] for sub in arr2]
-
+#year = '2021'
 # Prepare dataframes for analysis
 locs = pd.DataFrame(columns=['lat','long'], index=states)
-eta_rel_list, mpp_list, spec_list = [], [], []
-year_eta_rel_list, year_mpp_list, year_spec_list = [], [], []
+wet = ['cloud', 'temp', 'precip', 'poa', 'aod550']
+weather_year = pd.Series(index=wet)
+weather_mon = pd.DataFrame(columns=wet)
+hour_eta_rel_list, hour_spec_list = [], []
+mon_weather_list, mon_eta_list, mon_eta_rel_list, mon_mpp_list, mon_spec_list = [], [], [], [], []
+year_weather_list, year_eta_list, year_eta_rel_list, year_mpp_list, year_spec_list = [], [], [], [], []
 j=0
 for a in arr2:
 
@@ -48,18 +72,12 @@ for a in arr2:
     
     
     locs['lat'].loc[states[j]] = float(farms_metadata['Latitude'])
-    locs['long'].loc[states[j]] = float(farms_metadata['Longitude'])
-    # from Data.open_data import open_copernicus
-    # cop = open_copernicus(latitude, longitude, tz_offset)
-    
+    locs['long'].loc[states[j]] = float(farms_metadata['Longitude'])   
     
     # Trim first few days (assuming -ve time zone means overspill into previous year)
     month0 = time[0].month
     year0 = time[0].year
     farms_data = farms_data[farms_data.index > f'{year0}-{month0}-31 23:59']
-    # cop = cop[cop.index > f'{year0}-{month0}-31 23:59']
-    # cop.loc['2021-12-31 14:00:00'] = 0
-    # cop.loc['2021-12-31 15:00:00'] = 0
     
     
     # Separate stuff into farms_df as farms_data is big with long labels
@@ -67,6 +85,8 @@ for a in arr2:
                              'cloud':farms_data['Cloud Type'], 'albedo':farms_data['Surface Albedo'], 'precip':farms_data['Precipitable Water'],
                              'ghi':farms_data['GHI'], 'dhi':farms_data['DHI'], 'dni':farms_data['DNI'],
                              'zenith':farms_data['Solar Zenith Angle'], 'azimuth':farms_data['Solar Azimuth Angle']})
+    farms_df['aod550'] = open_aod550_final(lat=float(farms_metadata['Latitude']), long=float(farms_metadata['Longitude']),
+                                           year=year, tz_offset=tz_offset)
     
     
     # POA Irradiance
@@ -82,90 +102,305 @@ for a in arr2:
     farms_df['poa_global'] = 0
     farms_df.loc[farms_df['cloud'] < 3, 'poa_global'] = farms_df['poa_isotropic']
     farms_df.loc[farms_df['cloud'] >2, 'poa_global'] = farms_df['poa_klucher']
-            
-    # Get effective irradiance
-    mpp = pd.DataFrame(columns = types)
-    eta_rel = pd.DataFrame(columns = types)
-    i = 0
+    
+    
+    # Weather statistics
+    def sort_weather(weather, poa): # Getmonthly and yearly averages
+        temp = weather[(poa>0)]
+        mon = temp.resample('M').mean()
+        year = temp.mean()
+        return mon, year
+    
+    weather_mon['temp'], weather_year['temp'] = sort_weather(farms_df['temp_air'], farms_df['poa_global'])
+    weather_mon['precip'], weather_year['precip'] = sort_weather(farms_df['precip'], farms_df['poa_global'])
+    weather_mon['aod550'], weather_year['aod550'] = sort_weather(farms_df['aod550'], farms_df['poa_global'])
+       
+    cloudy_times = farms_df['cloud'][(farms_df['poa_global']>0) & (farms_df['cloud']>2)]
+    sunny_times = farms_df['cloud'][(farms_df['poa_global']>0)]
+    weather_mon['cloud'] = 100* cloudy_times.resample('M').count() / sunny_times.resample('M').count()
+    weather_year['cloud'] = 100* cloudy_times.count() / sunny_times.count()
+    
+    weather_mon['poa'] = farms_df['poa_global'].resample('M').apply(np.trapz)
+    weather_year['poa'] = np.trapz(farms_df['poa_global'])
+    
+    
+    # Prepare looped variables
+    mpp = pd.DataFrame(columns = types1)
+    eta = pd.DataFrame(columns = types1)
+    eta_rel = pd.DataFrame(columns = types1)
     spec_mismatch = pd.DataFrame(columns=types)
     spec_mon = pd.DataFrame(columns=types)
+    spec_hour = pd.DataFrame(columns=types)
     spec_year = pd.Series(index=types)
-    for material in modules.loc['Technology']:
+    hour = farms_df.index.hour
+    
+    i = 0
+    # Loop for material types
+    for material in types:
         spec_mismatch[material], farms_df['poa_farms'], mat = calc_spectral_modifier(material, farms_data)
         farms_df['effective_irradiance'] = farms_df['poa_global'] * spec_mismatch[material]
         farms_df = farms_df.fillna(0)
         
-        # Calculate cell parameters
-        temp_cell = pvlib.temperature.faiman(farms_df['poa_global'], farms_df['temp_air'], farms_df['wind_speed'])
-        cec_params = pvlib.pvsystem.calcparams_cec(farms_df['effective_irradiance'], temp_cell, modules.loc['alpha_sc'].iloc[i],
-                                                   modules.loc['a_ref'].iloc[i], modules.loc['I_L_ref'].iloc[i],
-                                                   modules.loc['I_o_ref'].iloc[i], modules.loc['R_sh_ref'].iloc[i],
-                                                   modules.loc['R_s'].iloc[i], modules.loc['Adjust'].iloc[i])
-        
-        # Max power point
-        mpp[material] = pvlib.pvsystem.max_power_point(*cec_params, method='newton').p_mp
-        eta_rel[material] = (mpp[material] / modules.loc['STC'].iloc[i]) / (farms_df['poa_global'] / 1000)
+        if material in types2:  # perovskite and triple cannot use single diode model
+            0
+        else:
+            
+            # Calculate cell parameters
+            temp_cell = pvlib.temperature.faiman(farms_df['poa_global'], farms_df['temp_air'], farms_df['wind_speed'])
+            cec_params = pvlib.pvsystem.calcparams_cec(farms_df['effective_irradiance'], temp_cell, modules.loc['alpha_sc'].iloc[i],
+                                                       modules.loc['a_ref'].iloc[i], modules.loc['I_L_ref'].iloc[i],
+                                                       modules.loc['I_o_ref'].iloc[i], modules.loc['R_sh_ref'].iloc[i],
+                                                       modules.loc['R_s'].iloc[i], modules.loc['Adjust'].iloc[i])
+            
+            # Max power point
+            mpp[material] = pvlib.pvsystem.max_power_point(*cec_params, method='newton').p_mp
+            
+        spec_hour[material] = farms_df['effective_irradiance'].groupby(hour).apply(np.trapz) / farms_df['poa_global'].groupby(hour).apply(np.trapz)
         spec_mon[material] = farms_df['effective_irradiance'].resample('M').apply(np.trapz) / farms_df['poa_global'].resample('M').apply(np.trapz)
         spec_year[material] = np.trapz(farms_df['effective_irradiance']) / np.trapz(farms_df['poa_global'])
         i=i+1
     
+    # Append hourly variables
+    hour_spec_list.append(spec_hour)
+    top = mpp.groupby(hour).apply(np.mean) / modules.loc['pstc'].to_numpy()   
+    bot = farms_df['poa_global'].groupby(hour).apply(np.mean) / 1000
+    hour_eta_rel_list.append(top.divide(bot.replace(0,np.nan), axis=0))
+    
     # Append yearly variables
     year_spec_list.append(spec_year)
     year_mpp_list.append(np.trapz(mpp, axis=0))
-    top = np.trapz(mpp, axis=0) / modules.loc['STC'].to_numpy()   
+    year_weather_list.append(weather_year.copy())
+    
+    top = 100 * np.trapz(mpp, axis=0)
+    bot = np.trapz(farms_df['poa_global']) * modules.loc['area'].to_numpy()   
+    year_eta_list.append(top/bot)
+    
+    top = np.trapz(mpp, axis=0) / modules.loc['pstc'].to_numpy()   
     bot = np.trapz(farms_df['poa_global'] / 1000)
     year_eta_rel_list.append(top/bot)
     
-    # Append monthly variables
-    spec_list.append(spec_mon)
     
-    poa_mon = farms_df['poa_global'].resample('M').apply(np.trapz)
+    # Append monthly variables
+    mon_spec_list.append(spec_mon)   
     mpp_mon = mpp.resample('M').apply(np.trapz)
-    mpp_list.append(round(mpp_mon, 1))
- 
-    top = mpp_mon / modules.loc['STC'].to_numpy()   
-    bot = (poa_mon / 1000).to_numpy().reshape(12,1)
-    eta_rel_mon = top / bot
-    eta_rel_list.append(round(eta_rel_mon,3))
+    mon_mpp_list.append(round(mpp_mon, 1)) 
+    mon_weather_list.append(weather_mon.copy())
+    
+    top = 100 *mpp_mon / modules.loc['area'].to_numpy()
+    bot = (farms_df['poa_global'].resample('M').apply(np.trapz)).to_numpy().reshape(12,1)
+    mon_eta_list.append(round(top / bot,3))
+    
+    top = mpp_mon / modules.loc['pstc'].to_numpy()   
+    bot = (farms_df['poa_global'].resample('M').apply(np.trapz) / 1000).to_numpy().reshape(12,1)
+    mon_eta_rel_list.append(round(top / bot,3))
     j=j+1
 
-def make_2d_pandas(np_input, types, states):
-    df = pd.DataFrame(data=np_input, columns=types)
+
+# Yearly variables into pandas
+def make_2d_pandas(list_input, types, states):
+    df = pd.DataFrame(data=list_input, columns=types, dtype=float)
     df.index = states
     return df
-mpp_yearly = make_2d_pandas(year_mpp_list, types, states)
-eta_rel_yearly = make_2d_pandas(year_eta_rel_list, types, states)
+mpp_yearly = make_2d_pandas(year_mpp_list, types1, states)
+eta_yearly = make_2d_pandas(year_eta_list, types1, states)
+eta_rel_yearly = make_2d_pandas(year_eta_rel_list, types1, states)
 spec_yearly = make_2d_pandas(year_spec_list, types, states)
+weather_yearly = make_2d_pandas(year_weather_list, wet, states)
 
-    
-def make_3d_pandas(np_input):
+# Monthly variables into pandas
+def make_3d_pandas_monthly(list_input, types, states):
+    np_input = np.array(list_input)
     index = pd.MultiIndex.from_product([range(s)for s in np_input.shape])
-    df = pd.DataFrame({'A': np_input.flatten()}, index=index)['A']
+    df = pd.DataFrame({'A': np_input.flatten()}, index=index, dtype=float)['A']
     df = df.unstack()
     df.columns = types
-    df.index.names = ['Location', 'Month']
+    df.index.names = ['State', 'Month']
+    df.index = df.index.set_levels(states, level=0)
+    df.index = df.index.set_levels(np.arange(1,13), level=1)
     return df
-mpp_monthly = make_3d_pandas(np.array(mpp_list))
-eta_rel_monthly = make_3d_pandas(np.array(eta_rel_list))
-spec_monthly = make_3d_pandas(np.array(spec_list))
+mpp_monthly = make_3d_pandas_monthly(mon_mpp_list, types1, states)
+eta_monthly = make_3d_pandas_monthly(mon_eta_list, types1, states)
+eta_rel_monthly = make_3d_pandas_monthly(mon_eta_rel_list, types1, states)
+spec_monthly = make_3d_pandas_monthly(mon_spec_list, types, states)
+weather_monthly = make_3d_pandas_monthly(mon_weather_list, wet, states)
+
+# Hourly variables into pandas
+def make_3d_pandas_hourly(list_input, types, states):
+    np_input = np.array(list_input)
+    index = pd.MultiIndex.from_product([range(s)for s in np_input.shape])
+    df = pd.DataFrame({'A': np_input.flatten()}, index=index, dtype=float)['A']
+    df = df.unstack()
+    df.columns = types
+    df.index.names = ['State', 'Hour']
+    df.index = df.index.set_levels(states, level=0)
+    df.index = df.index.set_levels(np.arange(0,24), level=1)
+    return df
+eta_rel_hourly = make_3d_pandas_hourly(hour_eta_rel_list, types1, states)
+spec_hourly = make_3d_pandas_hourly(hour_spec_list, types, states)
 
 eta_rel_var = pd.DataFrame(columns=types, index=states, dtype=float)
-k=0
 for s in states:
-    eta_rel_var.loc[s] = eta_rel_monthly.loc[k].max() - eta_rel_monthly.loc[k].min()
-    k=k+1
+    eta_rel_var.loc[s] = eta_rel_monthly.loc[s].max() - eta_rel_monthly.loc[s].min()
 
 
+
+
+# USA MAP
 for t in types:
     coords['CUSTOM'] = spec_yearly[t]
     plt.figure()
-    figmap = coords.plot(column='CUSTOM',figsize=(25, 13), legend=True, cmap='coolwarm')
+    figmap = coords.plot(column='CUSTOM',figsize=(25, 13), edgecolor='grey', legend=True, cmap='coolwarm_r', vmin=0.95, vmax=1.05, legend_kwds={'ticks':np.arange(0.95,1.05,0.025)})
     plt.xlabel('Longitude',fontsize=20)
     plt.ylabel('Latitude',fontsize=20)
     plt.xticks(fontsize=18)
     plt.yticks(fontsize=18)
+    plt.title(t, fontsize=30)
     cb_ax = figmap.figure.axes[1]
     cb_ax.tick_params(labelsize=18)
     for i in range(len(locs)):
         plt.text(locs.long[i],locs.lat[i],locs.index[i],size=10)
     plt.show()
+for t in types1:
+    coords['CUSTOM'] = eta_rel_yearly[t]
+    plt.figure()
+    figmap = coords.plot(column='CUSTOM',figsize=(25, 13), edgecolor='grey', legend=True, cmap='coolwarm_r', vmin=0.9, vmax=1.1, legend_kwds={'ticks':np.arange(0.9,1.1,0.025)})
+    plt.xlabel('Longitude',fontsize=20)
+    plt.ylabel('Latitude',fontsize=20)
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
+    plt.title(t, fontsize=30)
+    cb_ax = figmap.figure.axes[1]
+    cb_ax.tick_params(labelsize=18)
+    for i in range(len(locs)):
+        plt.text(locs.long[i],locs.lat[i],locs.index[i],size=10)
+    plt.show()
+for t in types1:
+    coords['CUSTOM'] = eta_yearly[t] - eta_yearly['mono-Si']
+    plt.figure()
+    figmap = coords.plot(column='CUSTOM',figsize=(25, 13), edgecolor='grey', legend=True, cmap='Reds_r')#, vmin=-8, vmax=-4, legend_kwds={'ticks':np.arange(-8,-4,0.5)})
+    plt.xlabel('Longitude',fontsize=20)
+    plt.ylabel('Latitude',fontsize=20)
+    plt.xticks(fontsize=18)
+    plt.yticks(fontsize=18)
+    plt.title(t, fontsize=30)
+    cb_ax = figmap.figure.axes[1]
+    cb_ax.tick_params(labelsize=18)
+    for i in range(len(locs)):
+        plt.text(locs.long[i],locs.lat[i],locs.index[i],size=10)
+    plt.show()
+
+
+
+# Spectral Modifier
+plt.figure(figsize=(6,4))
+plt.plot(spec_monthly.groupby(level=1).mean(), label=types)
+plt.ylabel('Spectral Modifier')
+plt.xlabel('Month')
+plt.xticks(np.arange(1,13,1))
+plt.yticks(np.arange(0.98,1.12,0.02))
+plt.legend()
+plt.figure(figsize=(6,4))
+plt.plot(spec_hourly.groupby(level=1).mean(), label=types)
+plt.ylabel('Spectral Modifier')
+plt.xlabel('Hour')
+plt.xticks(np.arange(0,24,2))
+plt.yticks(np.arange(0.98,1.12,0.02))
+plt.legend()
+
+
+# Relative Efficiency  
+plt.figure(figsize=(6,4))
+plt.plot(eta_rel_monthly.groupby(level=1).mean(), label=types1)
+plt.ylabel('Relative Efficiency')
+plt.xlabel('Month')
+plt.xticks(np.arange(1,13,1))
+plt.yticks(np.arange(0.8,1.25,0.05))
+plt.legend()
+plt.figure(figsize=(6,4))
+plt.plot(eta_rel_hourly.groupby(level=1).mean(), label=types1)
+plt.ylabel('Relative Efficiency')
+plt.xlabel('Hour')
+plt.xticks(np.arange(0,24,2))
+plt.yticks(np.arange(0.8,1.25,0.05))
+plt.legend()
+
+
+# TRENDS WITH WEATHER
+def weather_plot(weather, effect):
+   fig = plt.figure(figsize=(8,6))
+   for t in effect.columns:
+       y = effect[t]
+       r2 = scipy.stats.linregress(x, y).rvalue
+       plt.scatter(x, y, alpha=0.4)
+       z = np.polyfit(x, y, 1)
+       p = np.poly1d(z)
+       plt.plot(x,p(x),"-", label=f'{t}: {round(r2,3)}')
+   return fig, r2
+
+# Temperature
+x = weather_monthly['temp']
+fig, r2 = weather_plot(x, eta_rel_monthly)
+plt.xlabel('Monthly Mean Temperature [degC] (Daylight Hours)')
+plt.ylabel('Relative Efficiency')
+plt.legend()
+plt.show()
+
+# Precip
+x = weather_yearly['precip']
+fig, r2 = weather_plot(x, spec_yearly)
+plt.xlabel('Yearly Mean Precipitable Water [mm] (Daylight Hours)')
+plt.ylabel('Spectral Modifier')
+plt.legend()
+
+# Cloud
+x = weather_yearly['cloud']
+fig, r2 = weather_plot(x, spec_yearly)
+plt.xlabel('Yearly Average % Daylight Hours with Cloud Cover (cloud type > 2)')
+plt.ylabel('Spectral Modifier')
+plt.legend()
+
+# POA
+x = weather_yearly['poa']
+fig, r2 = weather_plot(x, spec_yearly)
+plt.xlabel('Yearly POA [J/m^2]')
+plt.ylabel('Spectral Modifier')
+plt.legend()
+
+# AOD550
+x = weather_yearly['aod550']
+fig, r2 = weather_plot(x, spec_yearly)
+plt.xlabel('Yearly Average Aerosol Optical Depth at 550nm')
+plt.ylabel('Spectral Modifier')
+plt.legend()
+
+
+## Effects on mpp
+# Temperature
+x = weather_monthly['temp']
+fig, r2 = weather_plot(x, mpp_monthly)
+plt.xlabel('Monthly Mean Temperature [degC] (Daylight Hours)')
+plt.ylabel('Energy Generated [J]')
+plt.legend()
+plt.show()
+
+# Precip
+x = weather_yearly['precip']
+fig, r2 = weather_plot(x, mpp_yearly)
+plt.xlabel('Yearly Mean Precipitable Water [mm] (Daylight Hours)')
+plt.ylabel('Energy Generated [J]')
+plt.legend()
+
+# Cloud
+x = weather_yearly['cloud']
+fig, r2 = weather_plot(x, mpp_yearly)
+plt.xlabel('Yearly Average % Daylight Hours with Cloud Cover (cloud type > 2)')
+plt.ylabel('Energy Generated [J]')
+plt.legend()
+
+# AOD550
+x = weather_yearly['aod550']
+fig, r2 = weather_plot(x, mpp_yearly)
+plt.xlabel('Yearly Average Aerosol Optical Depth at 550nm')
+plt.ylabel('Energy Generated [J]')
+plt.legend()
+
