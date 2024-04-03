@@ -274,8 +274,6 @@ print(fin_temp_stats.T)
 
 
 
-
-
 # # PLOT
 # import matplotlib.pyplot as plt
 # plt.figure()

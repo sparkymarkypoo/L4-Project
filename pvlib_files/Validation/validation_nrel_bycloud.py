@@ -176,10 +176,13 @@ import os
 folder = r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Data For Validating Models'
 locations = ['Golden', 'Eugene', 'Cocoa']
 spec_models = ['farms-a', 'farms-b', 'sapm', 'firstsolar', 'caballero', 'none']
+trans_models = ['isotropic', 'klucher', 'haydavies', 'reindl', 'king', 'perez']
 sum_pow_nmbe = pd.DataFrame()
 sum_pow_nrmse = pd.DataFrame()
+all_poa_nmbe = pd.DataFrame(columns=trans_models+['FARMS'], index=np.arange(0,6,1))
+all_poa_nrmse = pd.DataFrame(columns=trans_models+['FARMS'], index=np.arange(0,6,1))
+i=0
 for location in locations:
-
     # Get FARMS data
     full_farms_df, full_farms_data, cec_params, sandia_params = open_farms_and_pv_params(folder, location)
     
@@ -202,7 +205,7 @@ for location in locations:
       
         # Calculate alternative spectral mismatches
         alt_mismatch, farms_df = alternative_spectral_mismatch(farms_df, material=material, module=sandia_params.loc[pv_name],
-                                                               location=location, trans_model='haydavies')        
+                                                               location=location, trans_model='isotropic')        
         
         # Estimate CEC params from specsheet
         I_L_ref, I_o_ref, R_s, R_sh_ref, a_ref, Adjust, alpha_sc = get_cec_ceoffs(cec_params, material, pv_name)
@@ -244,10 +247,12 @@ for location in locations:
                                                   columns=sandia_params.columns, index=sandia_temp_cell.index)
             sandia_mpp = pvlib.pvsystem.sapm(poa_eff, sandia_temp_cell, sandia_params_repeated).p_mp 
         
-            cloud_cec = cec_mpp[farms_df['cloud']>2].copy()
-            cloud_real = real_mpp[farms_df['cloud']>2].copy()
+            cloud_cec = cec_mpp[farms_df['cloud']<2].copy()
+            cloud_real = real_mpp[farms_df['cloud']<2].copy()  
+            # cloud_cec = cec_mpp[farms_df['cloud']>1].copy()
+            # cloud_real = real_mpp[farms_df['cloud']>1].copy()   
         
-            pow_nmbe[t].loc[a], pow_nrmse[t].loc[a] = stats_calcs(cloud_real, cloud_cec*0.93)  
+            pow_nmbe[t].loc[a], pow_nrmse[t].loc[a] = stats_calcs(cloud_real, cloud_cec*0.91)  
 
         pow_nmbe = abs(pow_nmbe.rename(index={a: material}))
         pow_nrmse = abs(pow_nrmse.rename(index={a: material}))
@@ -269,31 +274,34 @@ for location in locations:
         
     pd.options.mode.chained_assignment = None  # default='warn' 
     # Cloud types
-    trans_models = ['isotropic', 'klucher', 'haydavies', 'reindl', 'king', 'perez']
     poa_cloud = pd.DataFrame(index=['nmbe', 'nrmse'], columns = trans_models)
     poa_nocloud = pd.DataFrame(index=['nmbe', 'nrmse'], columns = trans_models)
 
-    # cloud_farms = farms_df[farms_df['cloud']>2].copy()
-    # nocloud_farms = farms_df[farms_df['cloud']<3].copy()
-    # cloud_real = real_poa[farms_df['cloud']>2].copy()
-    # nocloud_real = real_poa[farms_df['cloud']<3].copy()
-    # # print(cloud, len(cloud_farms))
-    # for t in trans_models:
-    #     if cloud_farms.empty == True:
-    #         dog=1
-    #     else:    
-    #         alt_mismatch, cloud_farms = alternative_spectral_mismatch(cloud_farms, material=material, module=sandia_params.loc[pv_name],
-    #                                                             location=location, trans_model=t)
-    #         alt_mismatch, nocloud_farms = alternative_spectral_mismatch(nocloud_farms, material=material, module=sandia_params.loc[pv_name],
-    #                                                             location=location, trans_model=t)
-    #     poa_cloud[t] = stats_calcs(cloud_real, cloud_farms['poa_trans'])
-    #     poa_nocloud[t]  = stats_calcs(nocloud_real, nocloud_farms['poa_trans'])
-    # poa_cloud['FARMS'] = stats_calcs(cloud_real, cloud_farms['poa_global'])
-    # poa_nocloud['FARMS']  = stats_calcs(nocloud_real, nocloud_farms['poa_global'])
-    # print(location)
-    # print(poa_nocloud)
-    # print(poa_cloud)
-    # print(' ')
+    cloud_farms = farms_df[farms_df['cloud']>1].copy()
+    nocloud_farms = farms_df[farms_df['cloud']<2].copy()
+    cloud_real = real_poa[farms_df['cloud']>1].copy()
+    nocloud_real = real_poa[farms_df['cloud']<2].copy()
+    # print(cloud, len(cloud_farms))
+    for t in trans_models:
+        if cloud_farms.empty == True:
+            dog=1
+        else:    
+            alt_mismatch, cloud_farms = alternative_spectral_mismatch(cloud_farms, material=material, module=sandia_params.loc[pv_name],
+                                                                location=location, trans_model=t)
+            alt_mismatch, nocloud_farms = alternative_spectral_mismatch(nocloud_farms, material=material, module=sandia_params.loc[pv_name],
+                                                                location=location, trans_model=t)
+        poa_cloud[t] = stats_calcs(cloud_real, cloud_farms['poa_trans'])
+        poa_nocloud[t]  = stats_calcs(nocloud_real, nocloud_farms['poa_trans'])
+    poa_cloud['FARMS'] = stats_calcs(cloud_real, cloud_farms['poa_global'])
+    poa_nocloud['FARMS']  = stats_calcs(nocloud_real, nocloud_farms['poa_global'])
+    
+    all_poa_nmbe.iloc[i] = poa_nocloud.iloc[0]
+    all_poa_nmbe.iloc[i+3] = poa_cloud.iloc[0]
+    all_poa_nrmse.iloc[i] = poa_nocloud.iloc[1]
+    all_poa_nrmse.iloc[i+3] = poa_cloud.iloc[1]
+    plt.figure()
+    plt.plot(farms_df['aod550'])
+    i=i+1
 
     
 fin_pow_nmbe = sum_pow_nmbe/len(locations)
@@ -301,20 +309,5 @@ fin_pow_nrmse = sum_pow_nrmse/len(locations)
 
 print(np.mean(fin_pow_nmbe))
 print(np.mean(fin_pow_nrmse))
-
-
-# # PLOT
-# import matplotlib.pyplot as plt
-# plt.figure()
-# # pc = plt.scatter(real_mpp, cec_mpp, c=cec_temp_cell, cmap='jet')
-# # pc = plt.scatter(real_mpp, cec_mpp, c=farms_df['cloud'], cmap='jet')
-# pc = plt.scatter(real_mpp, cec_mpp, c=spec_mismatch, cmap='jet')
-# # pc = plt.scatter(real_mpp, sandia_mpp, c=spec_mismatch, cmap='jet')
-# plt.colorbar(label='spectral modifier', ax=plt.gca())
-# pc.set_alpha(0.5)
-# plt.grid(alpha=0.5)
-# plt.xlabel('Measured Power [W]')
-# plt.ylabel('Simulated Power [W]')
-# plt.title(a)
-# plt.plot([0,real_mpp.max()], [0,real_mpp.max()])
-# plt.show()
+# fin_pow_nmbe.to_csv('C:/Users/mark/Downloads/bobob1.csv')
+# fin_pow_nrmse.to_csv('C:/Users/mark/Downloads/bobob2.csv')

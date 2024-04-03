@@ -12,46 +12,51 @@ import matplotlib.pyplot as plt
 
 # Import data
 from Data.open_data import NRELdata
-
-# Import coordinates/plotting stuff
-from US_map import county_map
-coords = county_map()
+from Data.open_data import open_aod550_final
 from pvlib_files.spec_response_function import calc_spectral_modifier
 
-
+year=2018
 
 # Define solar panel parameters
-SAM_URL = 'https://github.com/NREL/SAM/raw/develop/deploy/libraries/CEC%20Modules.csv'
-CEC_mods = pvlib.pvsystem.retrieve_sam(path=SAM_URL)
-modules = CEC_mods[['First_Solar_Inc__FS_7530A_TR1','Miasole_FLEX_03_480W','Jinko_Solar_Co__Ltd_JKM340PP_72','Jinko_Solar_Co__Ltd_JKMS350M_72']]
-CEC_mods = pvlib.pvsystem.retrieve_sam(name='CECMod')
-modules['Xunlight_XR36_300'] = CEC_mods['Xunlight_XR36_300']
-types = ['CdTe','CIGS','multi-Si','mono-Si','a-Si']
-modules.loc['Technology'] = types
+sheet = pd.read_csv('C:/Users/mark/Documents/L4-Project-Code/Data/spec_sheets.csv', index_col=0)#, dtype=np.float64)#dtype={'cell_type':str})
+modules = pd.DataFrame(columns=sheet.columns, index=['pstc', 'area', 'alpha_sc', 'I_L_ref', 'I_o_ref', 'R_s', 'R_sh_ref', 'a_ref', 'Adjust'])
+for s in sheet:
+
+    pstc = sheet[s].loc['pstc']
+    area = sheet[s].loc['area']
+    alpha_sc = sheet[s].loc['alpha_sc'] * sheet[s].loc['isc']/100
+    
+    params = pvlib.ivtools.sdm.fit_cec_sam(
+        celltype = s,
+        v_mp = sheet[s].loc['vmp'],
+        i_mp = sheet[s].loc['imp'],
+        v_oc = sheet[s].loc['voc'],
+        i_sc = sheet[s].loc['isc'],
+        alpha_sc = alpha_sc,
+        beta_voc = sheet[s].loc['beta_voc'] * sheet[s].loc['voc']/100,
+        gamma_pmp = sheet[s].loc['gamma_pmp'],
+        cells_in_series = sheet[s].loc['cells_in_series'])
+
+    modules[s] = (pstc, area, alpha_sc) + params
+types1 = ['CdTe','CIGS','multi-Si','mono-Si','a-Si']   # THESE ONES FOR POWER SIM
+modules.loc['Technology'] = types1
+types2 = ['perovskite','perovskite-si','triple']       # THESE ONES ONLY FOR POA SIM
+types = types1 + types2
 
 
 # Open NSRDB data
-farms_metadata = pd.read_csv(r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Spectral/2021-204887-fixed_tilt.csv', nrows=1)
-farms_data = pd.read_csv(r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Spectral/2021-204887-fixed_tilt.csv', skiprows=2)
+farms_metadata = pd.read_csv(r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Spectral/Camp_Fire_2018.csv', nrows=1)
+farms_data = pd.read_csv(r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Spectral/Camp_Fire_2018.csv', skiprows=2)
 time_pd = farms_data[['Year', 'Month', 'Day', 'Hour', 'Minute']]
 tz_offset = pd.DateOffset(hours=float(farms_metadata['Local Time Zone']))
 time = pd.to_datetime(time_pd) + tz_offset
 farms_data.index = time
 
 
-latitude = 34.33
-longitude = -118.22
-from Data.open_data import open_copernicus
-cop = open_copernicus(latitude, longitude, tz_offset)
-
-
 # Trim first few days (assuming -ve time zone means overspill into previous year)
 month0 = time[0].month
 year0 = time[0].year
 farms_data = farms_data[farms_data.index > f'{year0}-{month0}-31 23:59']
-cop = cop[cop.index > f'{year0}-{month0}-31 23:59']
-cop.loc['2021-12-31 14:00:00'] = 0
-cop.loc['2021-12-31 15:00:00'] = 0
 
 
 # Separate stuff into farms_df as farms_data is big with long labels
@@ -59,6 +64,10 @@ farms_df = pd.DataFrame({'temp_air':farms_data['Temperature'], 'wind_speed':farm
                          'cloud':farms_data['Cloud Type'], 'albedo':farms_data['Surface Albedo'], 'precip':farms_data['Precipitable Water'],
                          'ghi':farms_data['GHI'], 'dhi':farms_data['DHI'], 'dni':farms_data['DNI'],
                          'zenith':farms_data['Solar Zenith Angle'], 'azimuth':farms_data['Solar Azimuth Angle']})
+latitude = float(farms_metadata['Latitude'])
+longitude = float(farms_metadata['Longitude'])   
+farms_df['aod550'] = open_aod550_final(lat=float(farms_metadata['Latitude']), long=float(farms_metadata['Longitude']),
+                                       year=year, tz_offset=tz_offset)
 
 
 # POA Irradiance
@@ -80,31 +89,32 @@ farms_cloud = farms_df[farms_df.cloud > 2]
 
 
 # Get effective irradiance
-mpp = pd.DataFrame(columns = types)
-eta_rel = pd.DataFrame(columns = types)
+mpp = pd.DataFrame(columns = types1)
+eta_rel = pd.DataFrame(columns = types1)
 i = 0
 spec_mismatch = pd.DataFrame(columns=types)
-for material in modules.loc['Technology']:
+for material in types:
     spec_mismatch[material], farms_df['poa_farms'], mat = calc_spectral_modifier(material, farms_data)
     farms_df['effective_irradiance'] = farms_df['poa_global'] * spec_mismatch[material]
     farms_df = farms_df.fillna(0)
     
+    if material in types2:  # perovskite and triple cannot use single diode model
+        0
+    else:
     
-    # Calculate cell parameters
-    temp_cell = pvlib.temperature.faiman(farms_df['poa_global'], farms_df['temp_air'], farms_df['wind_speed'])
-    cec_params = pvlib.pvsystem.calcparams_cec(farms_df['effective_irradiance'], temp_cell, modules.loc['alpha_sc'].iloc[i],
-                                               modules.loc['a_ref'].iloc[i], modules.loc['I_L_ref'].iloc[i],
-                                               modules.loc['I_o_ref'].iloc[i], modules.loc['R_sh_ref'].iloc[i],
-                                               modules.loc['R_s'].iloc[i], modules.loc['Adjust'].iloc[i])
-
-
-    # Max power point
-    mpp[material] = pvlib.pvsystem.max_power_point(*cec_params, method='newton').p_mp
-    eta_rel[material] = (mpp[material] / modules.loc['STC'].iloc[i]) / (farms_df['poa_global'] / 1000)
+        # Calculate cell parameters
+        temp_cell = pvlib.temperature.faiman(farms_df['poa_global'], farms_df['temp_air'], farms_df['wind_speed'])
+        cec_params = pvlib.pvsystem.calcparams_cec(farms_df['effective_irradiance'], temp_cell, modules.loc['alpha_sc'].iloc[i],
+                                                   modules.loc['a_ref'].iloc[i], modules.loc['I_L_ref'].iloc[i],
+                                                   modules.loc['I_o_ref'].iloc[i], modules.loc['R_sh_ref'].iloc[i],
+                                                   modules.loc['R_s'].iloc[i], modules.loc['Adjust'].iloc[i])
+    
+    
+        # Max power point
+        mpp[material] = pvlib.pvsystem.max_power_point(*cec_params, method='newton').p_mp
+        eta_rel[material] = (mpp[material] / modules.loc['pstc'].iloc[i]) / (farms_df['poa_global'] / 1000)
     i=i+1
     
-    eta_rel_clear = eta_rel[material][farms_df.cloud < 3]
-    eta_rel_cloud = eta_rel[material][farms_df.cloud > 2]
     
     # Plots
     # plt.figure()
@@ -204,8 +214,8 @@ ax.set_xticks(np.arange(0,28,4))
 # Mean relative efficiency by averaging DC Power and POA by month
 plt.figure()
 i=0
-for t in types:
-    eta_power_monthly = (mpp_monthly[t] / modules.loc['STC'].iloc[i]) / (poa_monthly / 1000)
+for t in types1:
+    eta_power_monthly = (mpp_monthly[t] / modules.loc['pstc'].iloc[i]) / (poa_monthly / 1000)
     eta_power_monthly.name = t
     i=i+1
     ax = eta_power_monthly.plot()

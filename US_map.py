@@ -35,3 +35,31 @@ def state_map():
 
     return(df_new)
 
+def hexagons_map():
+
+    import geopandas as gpd
+    from shapely.ops import unary_union
+    import h3pandas
+    
+    # Read shapefile
+    gdf = gpd.read_file("C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Grid/cb_2018_us_state_500k/cb_2018_us_state_500k.shp")
+    
+    # Get US without territories / Alaska + Hawaii
+    usa = gdf[~gdf.NAME.isin(["Hawaii", "Alaska", "American Samoa", 
+                             "United States Virgin Islands", "Guam",
+                             "Commonwealth of the Northern Mariana Islands",
+                             "Puerto Rico"])]
+    
+    # Convert to EPSG 4326 for compatibility with H3 Hexagons
+    usa = usa.to_crs(epsg=4326)
+    # Get union of the shape (whole US)
+    union_poly = unary_union(usa.geometry)
+    
+    resolution = 3
+    hexagons = usa.h3.polyfill_resample(resolution)
+    
+    # Centres
+    hexagons['LAT'] = hexagons.centroid.map(lambda p: p.y)
+    hexagons['LONG'] = hexagons.centroid.map(lambda p: p.x)
+
+    return hexagons

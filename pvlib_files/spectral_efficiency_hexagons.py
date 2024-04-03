@@ -1,4 +1,4 @@
-
+# General imports
 import pvlib
 import numpy as np
 import pandas as pd
@@ -6,11 +6,17 @@ import matplotlib.pyplot as plt
 import os
 import scipy
 
-# Import coordinates/plotting stuff
-from US_map import state_map
-coords = state_map()
+# Import data and tools
 from pvlib_files.spec_response_function import calc_spectral_modifier
 from Data.open_data import open_aod550_final
+
+# Import maps
+from US_map import state_map
+usmap = state_map()
+from US_map import hexagons_map
+hexagons = hexagons_map()
+
+# Plotting tools
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import matplotlib as mpl
@@ -46,16 +52,15 @@ types = types1 + types2
 
 
 # Find NSRDB data
-# folder = 'D:/NSRDB_Data'
-folder = 'D:/NSRDB_Downloads_2'
+folder = 'D:/Hexagon_downloads'
 arr = os.listdir(folder)
-year = '2021'
-#year = '38_year2021_nsrdb.csv'
-arr2 = [k for k in arr if year in k]
-states = [sub[5:7] for sub in arr2]
-#year = '2021'
+
+#arr = arr[0:5]
+
+code = [sub[0:15] for sub in arr]
+
 # Prepare dataframes for analysis
-locs = pd.DataFrame(columns=['lat','long','alt'], index=states)
+locs = pd.DataFrame(columns=['lat','long','alt'], index=code)
 wet = ['cloud', 'temp', 'precip', 'poa', 'aod550']
 weather_year = pd.Series(index=wet)
 weather_mon = pd.DataFrame(columns=wet)
@@ -63,7 +68,7 @@ hour_eta_rel_list, hour_spec_list = [], []
 mon_weather_list, mon_eta_list, mon_eta_rel_list, mon_mpp_list, mon_spec_list = [], [], [], [], []
 year_weather_list, year_eta_list, year_eta_rel_list, year_mpp_list, year_spec_list = [], [], [], [], []
 j=0
-for a in arr2:
+for a in arr:
 
     # Open NSRDB data
     farms_metadata = pd.read_csv(rf'{folder}/{a}', nrows=1)
@@ -74,9 +79,9 @@ for a in arr2:
     farms_data.index = time
     
     
-    locs['lat'].loc[states[j]] = float(farms_metadata['Latitude'])
-    locs['long'].loc[states[j]] = float(farms_metadata['Longitude'])
-    locs['alt'].loc[states[j]] = pvlib.location.lookup_altitude(locs['lat'].loc[states[j]], locs['long'].loc[states[j]])
+    locs['lat'].loc[code[j]] = float(farms_metadata['Latitude'])
+    locs['long'].loc[code[j]] = float(farms_metadata['Longitude'])
+    locs['alt'].loc[code[j]] = pvlib.location.lookup_altitude(locs['lat'].loc[code[j]], locs['long'].loc[code[j]])
     
     # Trim first few days (assuming -ve time zone means overspill into previous year)
     month0 = time[0].month
@@ -89,8 +94,8 @@ for a in arr2:
                              'cloud':farms_data['Cloud Type'], 'albedo':farms_data['Surface Albedo'], 'precip':farms_data['Precipitable Water'],
                              'ghi':farms_data['GHI'], 'dhi':farms_data['DHI'], 'dni':farms_data['DNI'],
                              'zenith':farms_data['Solar Zenith Angle'], 'azimuth':farms_data['Solar Azimuth Angle']})
-    farms_df['aod550'] = open_aod550_final(lat=float(farms_metadata['Latitude']), long=float(farms_metadata['Longitude']),
-                                           year=year, tz_offset=tz_offset)
+    #farms_df['aod550'] = open_aod550_final(lat=float(farms_metadata['Latitude']), long=float(farms_metadata['Longitude']),
+     #                                      year='2021', tz_offset=tz_offset)
     
     
     # POA Irradiance
@@ -117,9 +122,9 @@ for a in arr2:
     
     weather_mon['temp'], weather_year['temp'] = sort_weather(farms_df['temp_air'], farms_df['poa_global'])
     weather_mon['precip'], weather_year['precip'] = sort_weather(farms_df['precip'], farms_df['poa_global'])
-    weather_mon['aod550'], weather_year['aod550'] = sort_weather(farms_df['aod550'], farms_df['poa_global'])
+    #weather_mon['aod550'], weather_year['aod550'] = sort_weather(farms_df['aod550'], farms_df['poa_global'])
        
-    cloudy_times = farms_df['cloud'][(farms_df['poa_global']>0) & (farms_df['cloud']>2)]
+    cloudy_times = farms_df['cloud'][(farms_df['poa_global']>0) & (farms_df['cloud']>1)]
     sunny_times = farms_df['cloud'][(farms_df['poa_global']>0)]
     weather_mon['cloud'] = 100* cloudy_times.resample('M').count() / sunny_times.resample('M').count()
     weather_year['cloud'] = 100* cloudy_times.count() / sunny_times.count()
@@ -205,15 +210,15 @@ for a in arr2:
 
 
 # Yearly variables into pandas
-def make_2d_pandas(list_input, types, states):
+def make_2d_pandas(list_input, types, code):
     df = pd.DataFrame(data=list_input, columns=types, dtype=float)
-    df.index = states
+    df.index = code
     return df
-mpp_yearly = make_2d_pandas(year_mpp_list, types1, states)
-eta_yearly = make_2d_pandas(year_eta_list, types1, states)
-eta_rel_yearly = make_2d_pandas(year_eta_rel_list, types1, states)
-spec_yearly = make_2d_pandas(year_spec_list, types, states)
-weather_yearly = make_2d_pandas(year_weather_list, wet, states)
+mpp_yearly = make_2d_pandas(year_mpp_list, types1, code)
+eta_yearly = make_2d_pandas(year_eta_list, types1, code)
+eta_rel_yearly = make_2d_pandas(year_eta_rel_list, types1, code)
+spec_yearly = make_2d_pandas(year_spec_list, types, code)
+weather_yearly = make_2d_pandas(year_weather_list, wet, code)
 
 # Monthly variables into pandas
 def make_3d_pandas_monthly(list_input, types, states):
@@ -226,11 +231,11 @@ def make_3d_pandas_monthly(list_input, types, states):
     df.index = df.index.set_levels(states, level=0)
     df.index = df.index.set_levels(np.arange(1,13), level=1)
     return df
-mpp_monthly = make_3d_pandas_monthly(mon_mpp_list, types1, states)
-eta_monthly = make_3d_pandas_monthly(mon_eta_list, types1, states)
-eta_rel_monthly = make_3d_pandas_monthly(mon_eta_rel_list, types1, states)
-spec_monthly = make_3d_pandas_monthly(mon_spec_list, types, states)
-weather_monthly = make_3d_pandas_monthly(mon_weather_list, wet, states)
+mpp_monthly = make_3d_pandas_monthly(mon_mpp_list, types1, code)
+eta_monthly = make_3d_pandas_monthly(mon_eta_list, types1, code)
+eta_rel_monthly = make_3d_pandas_monthly(mon_eta_rel_list, types1, code)
+spec_monthly = make_3d_pandas_monthly(mon_spec_list, types, code)
+weather_monthly = make_3d_pandas_monthly(mon_weather_list, wet, code)
 
 # Hourly variables into pandas
 def make_3d_pandas_hourly(list_input, types, states):
@@ -243,191 +248,154 @@ def make_3d_pandas_hourly(list_input, types, states):
     df.index = df.index.set_levels(states, level=0)
     df.index = df.index.set_levels(np.arange(0,24), level=1)
     return df
-eta_rel_hourly = make_3d_pandas_hourly(hour_eta_rel_list, types1, states)
-spec_hourly = make_3d_pandas_hourly(hour_spec_list, types, states)
+eta_rel_hourly = make_3d_pandas_hourly(hour_eta_rel_list, types1, code)
+spec_hourly = make_3d_pandas_hourly(hour_spec_list, types, code)
 
-eta_rel_var = pd.DataFrame(columns=types, index=states, dtype=float)
-for s in states:
+eta_rel_var = pd.DataFrame(columns=types, index=code, dtype=float)
+for s in code:
     eta_rel_var.loc[s] = eta_rel_monthly.loc[s].max() - eta_rel_monthly.loc[s].min()
 
 
 
-result = pd.concat([coords, spec_yearly], axis=1)
-value_min = 0.95
-value_max = 1.05
-cmap = 'bwr_r'
-cmap = 'coolwarm_r'
-
-f, axes = plt.subplots(figsize=(10, 5), ncols=2, nrows=2, sharex=True, sharey=True)
-
-result.plot(ax=axes[0][0], column='mono-Si', vmin=value_min, vmax=value_max, cmap=cmap)
-result.plot(ax=axes[0][1], column='CdTe', vmin=value_min, vmax=value_max, cmap=cmap)
-result.plot(ax=axes[1][0], column='perovskite', vmin=value_min, vmax=value_max, cmap=cmap)
-result.plot(ax=axes[1][1], column='triple', vmin=value_min, vmax=value_max, cmap=cmap)
-
-mappable = cm.ScalarMappable(norm=mcolors.Normalize(value_min, value_max), cmap=cmap)
-# [xpos, ypos, length, width]
-cb_ax = f.add_axes([0.1, -0.05, 0.8, 0.05])
-cbar = f.colorbar(mappable, cax=cb_ax, orientation='horizontal')
-plt.subplots_adjust(wspace=-0.05, hspace=0.05, 
-                    top=0.9, bottom=0.1, 
-                    left=0.1, right=0.9) 
-plt.show()
-
-
-
 # USA MAP
-for t in types:
-    coords['CUSTOM'] = spec_yearly[t]
-    plt.figure()
-    figmap = coords.plot(column='CUSTOM',figsize=(25, 13), edgecolor='grey', legend=True, cmap='coolwarm_r', vmin=0.95, vmax=1.05, legend_kwds={'ticks':np.arange(0.95,1.05,0.025)})
-    plt.xlabel('Longitude',fontsize=20)
-    plt.ylabel('Latitude',fontsize=20)
-    plt.xticks(fontsize=18)
-    plt.yticks(fontsize=18)
-    plt.title(t, fontsize=30)
-    cb_ax = figmap.figure.axes[1]
-    cb_ax.tick_params(labelsize=18)
-    plt.show()
-for t in types1:
-    coords['CUSTOM'] = eta_rel_yearly[t]
-    plt.figure()
-    figmap = coords.plot(column='CUSTOM',figsize=(25, 13), edgecolor='grey', legend=True, cmap='coolwarm_r', vmin=0.9, vmax=1.1, legend_kwds={'ticks':np.arange(0.9,1.1,0.025)})
-    plt.xlabel('Longitude',fontsize=20)
-    plt.ylabel('Latitude',fontsize=20)
-    plt.xticks(fontsize=18)
-    plt.yticks(fontsize=18)
-    plt.title(t, fontsize=30)
-    cb_ax = figmap.figure.axes[1]
-    cb_ax.tick_params(labelsize=18)
-    plt.show()
-# for t in types1:
-#     coords['CUSTOM'] = eta_yearly[t] - eta_yearly['mono-Si']
-#     plt.figure()
-#     figmap = coords.plot(column='CUSTOM',figsize=(25, 13), edgecolor='grey', legend=True, cmap='Reds_r')#, vmin=-8, vmax=-4, legend_kwds={'ticks':np.arange(-8,-4,0.5)})
-#     plt.xlabel('Longitude',fontsize=20)
-#     plt.ylabel('Latitude',fontsize=20)
-#     plt.xticks(fontsize=18)
-#     plt.yticks(fontsize=18)
-#     plt.title(t, fontsize=30)
-#     cb_ax = figmap.figure.axes[1]
-#     cb_ax.tick_params(labelsize=18)
-#     for i in range(len(locs)):
-#         plt.text(locs.long[i],locs.lat[i],locs.index[i],size=10)
-#     plt.show()
+def US_multiplot(hexagons, usmap, yearly_stat, four_types, labels, vmin, vmax, clabel):
+
+    result = pd.concat([hexagons, yearly_stat], axis=1)
+
+    cmap = 'coolwarm_r'
+    
+    f, axes = plt.subplots(figsize=(12.5, 6.25), ncols=2, nrows=2, sharex=True, sharey=True)
+    
+    result.plot(ax=axes[0][0], column=four_types[0], vmin=vmin, vmax=vmax, cmap=cmap)
+    result.plot(ax=axes[0][1], column=four_types[1], vmin=vmin, vmax=vmax, cmap=cmap)
+    result.plot(ax=axes[1][0], column=four_types[2], vmin=vmin, vmax=vmax, cmap=cmap)
+    result.plot(ax=axes[1][1], column=four_types[3], vmin=vmin, vmax=vmax, cmap=cmap)
+    
+    usmap.plot(ax=axes[0][0], facecolor="none", edgecolor='black', linewidth=0.1)
+    usmap.plot(ax=axes[0][1], facecolor="none", edgecolor='black', linewidth=0.1)
+    usmap.plot(ax=axes[1][0], facecolor="none", edgecolor='black', linewidth=0.1)
+    usmap.plot(ax=axes[1][1], facecolor="none", edgecolor='black', linewidth=0.1)
+    
+    axes[0][0].text(0.15, 0.1, labels[0], horizontalalignment='center', verticalalignment='center',
+                    transform=axes[0][0].transAxes, fontsize=11)
+    axes[0][1].text(0.15, 0.1, labels[1], horizontalalignment='center', verticalalignment='center',
+                    transform=axes[0][1].transAxes, fontsize=11)
+    axes[1][0].text(0.15, 0.1, labels[2], horizontalalignment='center', verticalalignment='center',
+                    transform=axes[1][0].transAxes, fontsize=11)
+    axes[1][1].text(0.15, 0.1, labels[3], horizontalalignment='center', verticalalignment='center',
+                    transform=axes[1][1].transAxes, fontsize=11)
+    
+    mappable = cm.ScalarMappable(norm=mcolors.Normalize(vmin, vmax), cmap=cmap)
+    # [xpos, ypos, length, width]
+    cb_ax = f.add_axes([0.9, 0.1, 0.015, 0.8])
+    cbar = f.colorbar(mappable, cax=cb_ax, orientation='vertical')
+    plt.subplots_adjust(wspace=-0.05, hspace=0.05, 
+                        top=0.9, bottom=0.1, 
+                        left=0.1, right=0.9) 
+    plt.ylabel(clabel) # Color bar label
+    f.supxlabel('Longitude')
+    f.supylabel('Latitude', x=0.07)
+    
+    return f
+
+f = US_multiplot(hexagons=hexagons, usmap=usmap, yearly_stat=spec_yearly,
+                 four_types=['mono-Si','CdTe','perovskite','triple'],
+                 labels=['mono-Si','CdTe','Perovskite','Triple-Junction'],
+                 vmin=0.94, vmax=1.06, clabel='Spectral Mismatch')
+
+f = US_multiplot(hexagons=hexagons, usmap=usmap, yearly_stat=spec_yearly,
+                 four_types=['multi-Si','CIGS','perovskite-si','a-Si'],
+                 labels=['multi-Si','CIGS','Perovskite-Si','a-Si'],
+                 vmin=0.94, vmax=1.06, clabel='Spectral Mismatch')
+
+f = US_multiplot(hexagons=hexagons, usmap=usmap, yearly_stat=eta_rel_yearly,
+                 four_types=['mono-Si','CdTe','CIGS','a-Si'],
+                 labels=['mono-Si','CdTe','CIGS','a-Si'],
+                 vmin=0.90, vmax=1.10, clabel='Relative Efficiency')
 
 
+CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a', # Color blind cycle
+                  '#f781bf', '#a65628', '#984ea3',
+                  '#999999', '#e41a1c', '#dede00']
 
 # Spectral Modifier
 plt.figure(figsize=(6,4))
-plt.plot(spec_monthly.groupby(level=1).mean(), label=types)
-plt.ylabel('Spectral Modifier')
-plt.xlabel('Month')
-plt.xticks(np.arange(1,13,1))
-plt.yticks(np.arange(0.98,1.12,0.02))
-plt.legend()
+labels=types1+['PVSK','PVSK-Si','Triple Junct.']
+spec_monthly.columns = labels
+spec_monthly.groupby(level=1).mean().plot(color=CB_color_cycle)
+plt.ylabel('Spectral Modifier', fontsize=11)
+plt.xlabel('Month', fontsize=11)
+plt.xticks(np.arange(1,13,1), fontsize=11)
+plt.yticks(np.arange(0.96,1.20,0.04), fontsize=11)
+plt.ylim(bottom=0.94, top=1.17)
 plt.figure(figsize=(6,4))
-plt.plot(spec_hourly.groupby(level=1).mean(), label=types)
-plt.ylabel('Spectral Modifier')
-plt.xlabel('Hour')
-plt.xticks(np.arange(0,24,2))
-plt.yticks(np.arange(0.98,1.12,0.02))
-plt.legend()
+spec_hourly.groupby(level=1).mean().plot(color=CB_color_cycle, legend=None)
+plt.ylabel('Spectral Modifier', fontsize=11)
+plt.xlabel('Hour', fontsize=11)
+plt.xticks(np.arange(0,22,2), fontsize=11)
+plt.yticks(np.arange(0.96,1.20,0.04), fontsize=11)
+plt.ylim(bottom=0.94, top=1.17)
+plt.xlim(left=4, right=21)
 
 
 # Relative Efficiency  
 plt.figure(figsize=(6,4))
-plt.plot(eta_rel_monthly.groupby(level=1).mean(), label=types1)
-plt.ylabel('Relative Efficiency')
-plt.xlabel('Month')
-plt.xticks(np.arange(1,13,1))
-plt.yticks(np.arange(0.8,1.25,0.05))
-plt.legend()
+eta_rel_monthly.groupby(level=1).mean().plot(color=CB_color_cycle)
+plt.ylabel('Relative Efficiency', fontsize=11)
+plt.xlabel('Month', fontsize=11)
+plt.xticks(np.arange(1,13,1), fontsize=11)
+plt.yticks(np.arange(0.88,1.10,0.04), fontsize=11)
+plt.ylim(top=1.08, bottom=0.88)
 plt.figure(figsize=(6,4))
-plt.plot(eta_rel_hourly.groupby(level=1).mean(), label=types1)
-plt.ylabel('Relative Efficiency')
-plt.xlabel('Hour')
-plt.xticks(np.arange(0,24,2))
-plt.yticks(np.arange(0.8,1.25,0.05))
-plt.legend()
+eta_rel_hourly[['CdTe','CIGS','multi-Si','mono-Si']].groupby(level=1).mean().plot(color=CB_color_cycle)
+plt.ylabel('Relative Efficiency', fontsize=11)
+plt.xlabel('Hour', fontsize=11)
+plt.xticks(np.arange(0,24,2), fontsize=11)
+plt.yticks(np.arange(0.88,1.10,0.04), fontsize=11)
+plt.xlim(left=4, right=21)
+plt.ylim(top=1.08, bottom=0.88)
 
 
 # TRENDS WITH WEATHER
 def weather_plot(weather, effect):
-   fig = plt.figure(figsize=(8,6))
+   fig = plt.figure(figsize=(6,4))
    for t in effect.columns:
        y = effect[t]
        r2 = scipy.stats.linregress(x, y).rvalue
-       plt.scatter(x, y, alpha=0.4)
+       plt.scatter(x, y, alpha=0.1)
        z = np.polyfit(x, y, 1)
        p = np.poly1d(z)
-       plt.plot(x,p(x),"-", label=f'{t}: {round(r2,3)}')
+       plt.plot(x,p(x),"-", label=f'{t}: {round(r2,2)}')
    return fig, r2
 
-# Temperature
-x = weather_monthly['temp']
-fig, r2 = weather_plot(x, eta_rel_monthly)
-plt.xlabel('Monthly Mean Temperature [degC] (Daylight Hours)')
-plt.ylabel('Relative Efficiency')
-plt.legend()
-plt.show()
 
 # Precip
 x = weather_yearly['precip']
 fig, r2 = weather_plot(x, spec_yearly)
 plt.xlabel('Yearly Mean Precipitable Water [mm] (Daylight Hours)')
 plt.ylabel('Spectral Modifier')
+#plt.ylim(top=1.1)
 plt.legend()
 
-# Cloud
-x = weather_yearly['cloud']
+# Altitude
+x = locs.alt.astype(np.float64)
 fig, r2 = weather_plot(x, spec_yearly)
-plt.xlabel('Yearly Average % Daylight Hours with Cloud Cover (cloud type > 2)')
+plt.xlabel('Altitude [m]')
 plt.ylabel('Spectral Modifier')
 plt.legend()
 
 # POA
-x = weather_yearly['poa']
+x = weather_yearly['poa']/1000
 fig, r2 = weather_plot(x, spec_yearly)
-plt.xlabel('Yearly POA [J/m^2]')
+plt.xlabel('Yearly Global POA [kWh/m^2]')
 plt.ylabel('Spectral Modifier')
-plt.legend()
-
-# AOD550
-x = weather_yearly['aod550']
-fig, r2 = weather_plot(x, spec_yearly)
-plt.xlabel('Yearly Average Aerosol Optical Depth at 550nm')
-plt.ylabel('Spectral Modifier')
-plt.legend()
-
-
-## Effects on mpp
-# Temperature
-x = weather_monthly['temp']
-fig, r2 = weather_plot(x, mpp_monthly)
-plt.xlabel('Monthly Mean Temperature [degC] (Daylight Hours)')
-plt.ylabel('Energy Generated [J]')
-plt.legend()
-plt.show()
-
-# Precip
-x = weather_yearly['precip']
-fig, r2 = weather_plot(x, mpp_yearly)
-plt.xlabel('Yearly Mean Precipitable Water [mm] (Daylight Hours)')
-plt.ylabel('Energy Generated [J]')
 plt.legend()
 
 # Cloud
 x = weather_yearly['cloud']
-fig, r2 = weather_plot(x, mpp_yearly)
-plt.xlabel('Yearly Average % Daylight Hours with Cloud Cover (cloud type > 2)')
-plt.ylabel('Energy Generated [J]')
+fig, r2 = weather_plot(x, mpp_yearly/1000)
+plt.xlabel('Yearly % Daylight Hours with Cloud Cover (cloud type > 1)')
+plt.ylabel('Energy Generated [kWh]')
 plt.legend()
 
-# AOD550
-x = weather_yearly['aod550']
-fig, r2 = weather_plot(x, mpp_yearly)
-plt.xlabel('Yearly Average Aerosol Optical Depth at 550nm')
-plt.ylabel('Energy Generated [J]')
-plt.legend()
 

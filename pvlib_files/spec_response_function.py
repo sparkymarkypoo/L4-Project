@@ -64,8 +64,7 @@ def calc_spectral_modifier(pv_name, spectrum_data):
     s_r = pd.Series(data=np.squeeze(spec_resp_interp), index=wvl)
         
     spec_mod = pvlib.spectrum.calc_spectral_mismatch_field(sr=s_r, e_sun=spectrum, e_ref=am15)
-    spec_mod = spec_mod.fillna(1)
-    spec_mod.loc[neg_index] = 1
+    spec_mod.loc[neg_index] = np.nan
 
     #np.trapz((am15*wvl*s_r)/1239.8, x=wvl)
     return spec_mod, poa, material

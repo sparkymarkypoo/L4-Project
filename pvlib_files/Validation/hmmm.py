@@ -9,6 +9,12 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from Data.open_data import open_aod550
+import matplotlib as mpl
+mpl.rcParams['figure.dpi'] = 300
+CB_color_cycle = ['#377eb8', '#ff7f00', '#4daf4a',
+                  '#f781bf', '#a65628', '#984ea3',
+                  '#999999', '#e41a1c', '#dede00']
+
 
 folder = r'C:/Users/mark/OneDrive - Durham University/L4 Project/L4-Project-Data/Data For Validating Models/Sandia'
 
@@ -60,7 +66,13 @@ for i in range(0, 9):
     aod_percentiles[i] = np.percentile(farms_df['aod550'], 10*(i+1), axis=0)
     precip_percentiles[i] = np.percentile(farms_df['precip'], 10*(i+1), axis=0)
 
-
+# Open TMY
+tmy_metadata = pd.read_csv(rf'{folder}/TMY.csv', nrows=1)
+tmy_data = pd.read_csv(rf'{folder}/TMY.csv', skiprows=2)
+tmy_data['Year'] = 2020
+time_pd = tmy_data[['Year', 'Month', 'Day', 'Hour', 'Minute']]
+tmy_time = pd.to_datetime(time_pd) + pd.DateOffset(hours=float(tmy_metadata['Local Time Zone'])) + pd.DateOffset(minutes=30)
+tmy_data.index = tmy_time
 
 
 # Transposition
@@ -80,6 +92,7 @@ clear = pvlib.irradiance.get_total_irradiance(surface_tilt=tilt, surface_azimuth
 farms_df['poa_trans'] = cloud
 farms_df['poa_trans'][farms_df['cloud']<2] = clear[farms_df['cloud']<2]
 # 'isotropic', 'klucher', 'haydavies', 'reindl', 'king', 'perez'
+#farms_df['poa_trans'] = cloud
 
 
 
@@ -117,6 +130,7 @@ def trim_data(simulated, measured):
     simulated = simulated[(simulated.index >= measured.index[0])]                        # trim to same dates
     simulated = simulated[~((simulated.index.month == 2) & (simulated.index.day == 29))] # remove leap day
     return simulated
+tmy_data = trim_data(tmy_data, vali_data)
 farms_df = trim_data(farms_df, vali_data)
 farms_data = trim_data(farms_data, vali_data)
 alt_mismatch = trim_data(alt_mismatch, vali_data)
@@ -147,10 +161,10 @@ def stats_calcs(real_power, sim_power):
 
 
 spec_models = ['farms-a', 'farms-b', 'sapm', 'firstsolar', 'caballero', 'none']
-pow_nmbe = pd.DataFrame(index=range(0,10), columns = spec_models)
-pow_nrmse = pd.DataFrame(index=range(0,10), columns = spec_models)
-cloud_pow = pd.DataFrame(index = ['nmbe','nrmse'], columns = spec_models)
-clear_pow = pd.DataFrame(index = ['nmbe','nrmse'], columns = spec_models)
+pow_nmbe = pd.DataFrame(index=range(7,19), columns = spec_models)
+pow_nrmse = pd.DataFrame(index=range(7,19), columns = spec_models)
+
+
 # Run model for all spectral models
 for t in spec_models:
     
@@ -185,96 +199,16 @@ for t in spec_models:
     # KOWALSKI, ANALYSIS!
     cec_mpp = cec_mpp.fillna(0)
     
-    for cloud in range(0,10):   
-        cloud_cec = cec_mpp[farms_df['cloud']==cloud].copy()
-        cloud_real = real_mpp[farms_df['cloud']==cloud].copy()    
-        pow_nmbe[t].loc[cloud], pow_nrmse[t].loc[cloud] = stats_calcs(cloud_real, cloud_cec)
+    for h in range(7,18):   
+        cloud_cec = cec_mpp[farms_df.index.hour==h].copy()
+        cloud_real = real_mpp[farms_df.index.hour==h].copy()    
+        pow_nmbe[t].loc[h], pow_nrmse[t].loc[h] = stats_calcs(cloud_real, cloud_cec)
         
-    # for aod in range(0,9):    
-    #     cloud_cec = cec_mpp[farms_df['aod550']>=aod_percentiles[aod]].copy()
-    #     cloud_real = real_mpp[farms_df['aod550']>=aod_percentiles[aod]].copy()    
-    #     pow_nmbe[t].loc[aod], pow_nrmse[t].loc[aod] = stats_calcs(cloud_real, cloud_cec)
         
-    # for precip in range(0,9):    
-    #     cloud_cec = cec_mpp[farms_df['precip']>=precip_percentiles[precip]].copy()
-    #     cloud_real = real_mpp[farms_df['precip']>=precip_percentiles[precip]].copy()    
-    #     pow_nmbe[t].loc[precip], pow_nrmse[t].loc[precip] = stats_calcs(cloud_real, cloud_cec)  
+plt.figure()
+abs(pow_nmbe).plot(color=CB_color_cycle)
+plt.xlabel('Hour of the day')
+plt.ylabel('NMBE %')
 
-    cloud_cec = cec_mpp[farms_df['cloud']>1].copy()
-    cloud_real = real_mpp[farms_df['cloud']>1].copy()
-    clear_cec = cec_mpp[farms_df['cloud']<2].copy()
-    clear_real = real_mpp[farms_df['cloud']<2].copy()
-
-    cloud_pow[t].loc['nmbe'], cloud_pow[t].loc['nrmse'] = stats_calcs(cloud_real, cloud_cec)
-    clear_pow[t].loc['nmbe'], clear_pow[t].loc['nrmse'] = stats_calcs(clear_real, clear_cec)
-
-print(clear_pow)
-print(cloud_pow)
-
-def transposition_poa(farms_df, module, trans_model):    
-        
-    # Transposition
-    farms_df['dni_extra'] = pvlib.irradiance.get_extra_radiation(farms_df.index, solar_constant=1366.1, method='spencer', epoch_year=2014)
-    farms_df['airmass'] = pvlib.atmosphere.get_relative_airmass(zenith=farms_df['zenith'], model= 'gueymard2003')
-
-    farms_df['poa_trans'] = pvlib.irradiance.get_total_irradiance(surface_tilt=35, surface_azimuth=180,
-                                solar_zenith=farms_df['zenith'], solar_azimuth=farms_df['azimuth'],
-                                dni=farms_df['dni'], ghi=farms_df['ghi'], dhi=farms_df['dhi'],
-                                dni_extra=farms_df['dni_extra'], airmass=farms_df['airmass'], albedo=farms_df['albedo'],
-                                model=trans_model, model_perez='sandiacomposite1988').poa_global
-    farms_df['poa_trans'] = farms_df['poa_trans'].fillna(0)  # some models give nan instead of 0 when no light present
-    # model = 'isotropic', 'klucher', 'haydavies', 'reindl', 'king', 'perez'
-    
-    
-    return farms_df
-
-
-# Cloud types
-trans_models = ['isotropic', 'klucher', 'haydavies', 'reindl', 'king', 'perez']
-poa_nmbe = pd.DataFrame(index=range(0,10), columns = trans_models)
-poa_nrmse = pd.DataFrame(index=range(0,10), columns = trans_models)
-pd.options.mode.chained_assignment = None  # default='warn'
-for cloud in poa_nmbe.index:
-    cloud_farms = farms_df[farms_df['cloud']==cloud].copy()
-    cloud_real = real_poa[farms_df['cloud']==cloud].copy()
-    for t in trans_models:       
-        cloud_farms = transposition_poa(farms_df=cloud_farms, module=module, trans_model=t)
-        poa_nmbe[t].loc[cloud], poa_nrmse[t].loc[cloud] = stats_calcs(cloud_real, cloud_farms['poa_trans'])        
-    if cloud == 0:
-        poa_nmbe['FARMS'], poa_nrmse['FARMS'] = stats_calcs(cloud_real, cloud_farms['poa_global'])
-    else: 
-        poa_nmbe['FARMS'].loc[cloud], poa_nrmse['FARMS'].loc[cloud] = stats_calcs(cloud_real, cloud_farms['poa_global'])
-
-poa_nmbe = poa_nmbe.dropna()
-poa_nrmse = poa_nrmse.dropna()
-
-
-# # Cloud types
-# all_poa_nmbe = pd.Series(index = trans_models)
-# all_poa_nrmse = pd.Series(index = trans_models)
-# for cloud in poa_nmbe.index:
-#     cloud_farms = farms_df[farms_df['cloud']>0].copy()
-#     cloud_real = real_poa[farms_df['cloud']>0].copy()
-#     for t in trans_models:       
-#         cloud_farms = transposition_poa(farms_df=cloud_farms, module=module, trans_model=t)
-#         all_poa_nmbe[t], all_poa_nrmse[t] = stats_calcs(cloud_real, cloud_farms['poa_trans'])           
-#     if cloud == 0:
-#         all_poa_nmbe['FARMS'], all_poa_nrmse['FARMS'] = stats_calcs(cloud_real, cloud_farms['poa_global'])
-#     else: 
-#         all_poa_nmbe['FARMS'], all_poa_nrmse['FARMS'] = stats_calcs(cloud_real, cloud_farms['poa_global'])
-
-
-
-
-# # PLOT
 # plt.figure()
-# # pc = plt.scatter(real_mpp, cec_mpp, c=cec_temp_cell, cmap='jet')
-# # pc = plt.scatter(real_mpp, cec_mpp, c=farms_df['cloud'], cmap='jet')
-# pc = plt.scatter(real_mpp, cec_mpp, c=spec_mismatch, cmap='jet')
-# plt.colorbar(label='spectral modifier', ax=plt.gca())
-# pc.set_alpha(0.5)
-# plt.grid(alpha=0.5)
-# plt.xlabel('Measured Power [W]')
-# plt.ylabel('Simulated Power [W]')
-# plt.plot([0,real_mpp.max()], [0,real_mpp.max()])
-# plt.show()
+# pow_nrmse.plot()
