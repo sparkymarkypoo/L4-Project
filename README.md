@@ -1,11 +1,11 @@
 # L4-Project
 
 Some required data stored in the Data folder, including:
-    One NSRDB/FARMS file (Camp_Fire)
-    Spectral response curves (for 8 materials)
-    Spec sheet data (for standard 5 materials)
-    US State census map .shp for plotting maps
-    Some old (and redundant) file opening tools in open_data
+    One NSRDB/FARMS file (Camp_Fire),
+    Spectral response curves (for 8 materials),
+    Spec sheet data (for standard 5 materials),
+    US State census map .shp for plotting maps,
+    Some old (and redundant) file opening tools in open_data,
     
 FARMS data used for states and hexagons was too big to be stored in the GitHub
 repo so is left out and must be downloaded separately. The supplied NSRDB_API
