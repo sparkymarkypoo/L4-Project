@@ -3,17 +3,19 @@ import pvlib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import os
 import scipy
 
+# Location
+import os
+cwd = os.path.dirname(os.getcwd())
+
 # Import data and tools
-from pvlib_files.spec_response_function import calc_spectral_modifier
-from Data.open_data import open_aod550_final
+from pvlib_files.Functions.spec_response_function import calc_spectral_modifier
 
 # Import maps
-from US_map import state_map
+from pvlib_files.Functions.US_map import state_map
 usmap = state_map()
-from US_map import hexagons_map
+from pvlib_files.Functions.US_map import hexagons_map
 hexagons = hexagons_map()
 
 # Plotting tools
@@ -24,7 +26,7 @@ mpl.rcParams['figure.dpi'] = 300
 
 
 # Define solar panel parameters
-sheet = pd.read_csv('C:/Users/mark/Documents/L4-Project-Code/Data/spec_sheets.csv', index_col=0)#, dtype=np.float64)#dtype={'cell_type':str})
+sheet = pd.read_csv(os.path.join(cwd, 'Data\spec_sheets.csv'), index_col=0)#, dtype=np.float64)#dtype={'cell_type':str})
 modules = pd.DataFrame(columns=sheet.columns, index=['pstc', 'area', 'alpha_sc', 'I_L_ref', 'I_o_ref', 'R_s', 'R_sh_ref', 'a_ref', 'Adjust'])
 
 for s in sheet:
@@ -52,16 +54,13 @@ types = types1 + types2
 
 
 # Find NSRDB data
-folder = 'D:/Hexagon_downloads'
+folder = 'D:/Hexagon_downloads'    # WHERE YOUR NSRDB_FARMS DATA IS LOCATED
 arr = os.listdir(folder)
-
-#arr = arr[0:5]
-
 code = [sub[0:15] for sub in arr]
 
 # Prepare dataframes for analysis
 locs = pd.DataFrame(columns=['lat','long','alt'], index=code)
-wet = ['cloud', 'temp', 'precip', 'poa', 'aod550']
+wet = ['cloud', 'temp', 'precip', 'poa']
 weather_year = pd.Series(index=wet)
 weather_mon = pd.DataFrame(columns=wet)
 hour_eta_rel_list, hour_spec_list = [], []
@@ -94,9 +93,7 @@ for a in arr:
                              'cloud':farms_data['Cloud Type'], 'albedo':farms_data['Surface Albedo'], 'precip':farms_data['Precipitable Water'],
                              'ghi':farms_data['GHI'], 'dhi':farms_data['DHI'], 'dni':farms_data['DNI'],
                              'zenith':farms_data['Solar Zenith Angle'], 'azimuth':farms_data['Solar Azimuth Angle']})
-    #farms_df['aod550'] = open_aod550_final(lat=float(farms_metadata['Latitude']), long=float(farms_metadata['Longitude']),
-     #                                      year='2021', tz_offset=tz_offset)
-    
+
     
     # POA Irradiance
     tilt = farms_data['Panel Tilt'].iloc[0]
@@ -122,8 +119,7 @@ for a in arr:
     
     weather_mon['temp'], weather_year['temp'] = sort_weather(farms_df['temp_air'], farms_df['poa_global'])
     weather_mon['precip'], weather_year['precip'] = sort_weather(farms_df['precip'], farms_df['poa_global'])
-    #weather_mon['aod550'], weather_year['aod550'] = sort_weather(farms_df['aod550'], farms_df['poa_global'])
-       
+    
     cloudy_times = farms_df['cloud'][(farms_df['poa_global']>0) & (farms_df['cloud']>1)]
     sunny_times = farms_df['cloud'][(farms_df['poa_global']>0)]
     weather_mon['cloud'] = 100* cloudy_times.resample('M').count() / sunny_times.resample('M').count()

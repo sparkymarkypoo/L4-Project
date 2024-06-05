@@ -1,1 +1,0 @@
-Data to be read moved to a folder external from the project folder to save space on github
